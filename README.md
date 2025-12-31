@@ -243,7 +243,7 @@ MIT License - see [LICENSE](./LICENSE) for details
 
 - **GitHub Issues**: Bug reports and feature requests
 - **Discussions**: Questions and community chat
-- **Twitter**: [@parawork](https://twitter.com/parawork) (if exists)
+- **Twitter**: [@paraworkHQ](https://x.com/paraworkHQ)
 
 ## Acknowledgments
 
