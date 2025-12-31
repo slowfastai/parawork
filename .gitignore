@@ -137,3 +137,10 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Parawork specific
+config.json
+data/
+*.db
+*.db-shm
+*.db-wal

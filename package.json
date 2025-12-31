@@ -1,0 +1,33 @@
+{
+  "name": "parawork",
+  "version": "0.1.0",
+  "description": "Parallel workspaces. Focused execution. An open-source TypeScript web orchestrator for AI coding agents.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --parallel --stream dev",
+    "build": "pnpm --recursive build",
+    "clean": "pnpm --recursive clean",
+    "typecheck": "pnpm --recursive typecheck",
+    "lint": "pnpm --recursive lint"
+  },
+  "keywords": [
+    "ai",
+    "coding-agents",
+    "orchestrator",
+    "claude-code",
+    "workflow",
+    "typescript"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "devDependencies": {
+    "better-sqlite3": "^9.6.0",
+    "esbuild": "^0.27.2",
+    "typescript": "^5.3.3"
+  }
+}
