@@ -31,8 +31,9 @@ async function getGitBranch(dirPath: string): Promise<string | null> {
  */
 async function getGitRemote(dirPath: string): Promise<string | null> {
   try {
-    const { stdout } = await execAsync(
-      `git -C "${dirPath}" config --get remote.origin.url`,
+    const { stdout } = await execFileAsync(
+      'git',
+      ['-C', dirPath, 'config', '--get', 'remote.origin.url'],
       { timeout: 500 }
     );
     return stdout.trim() || null;
