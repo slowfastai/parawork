@@ -3,12 +3,12 @@
  */
 import { readdir, stat } from 'fs/promises';
 import { join, basename, dirname } from 'path';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import type { DirectoryEntry, GitInfo } from '@parawork/shared';
 import { existsSync } from 'fs';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 /**
  * Get git branch for a directory
@@ -73,8 +73,8 @@ export async function listDirectories(dirPath: string): Promise<DirectoryEntry[]
     // Read directory contents
     const entries = await readdir(dirPath, { withFileTypes: true });
 
-    // Filter to only directories
-    const directories = entries.filter(entry => entry.isDirectory());
+    // Filter to only directories (exclude hidden directories starting with .)
+    const directories = entries.filter(entry => entry.isDirectory() && !entry.name.startsWith('.'));
 
     // Sort alphabetically (case-insensitive)
     directories.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
