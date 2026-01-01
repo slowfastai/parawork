@@ -2,8 +2,8 @@
  * Directory Browser Component
  * Allows users to visually browse and select project directories
  */
-import { useState, useEffect } from 'react';
-import { Folder, GitBranch, X, Home, ChevronRight } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Folder, GitBranch, X, Home, ChevronRight, Grid3x3, List, Search } from 'lucide-react';
 import { api } from '../lib/api';
 import type { DirectoryEntry } from '@parawork/shared';
 
@@ -19,6 +19,8 @@ export function DirectoryBrowser({ onSelect, onClose, initialPath }: DirectoryBr
   const [parentPath, setParentPath] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Fetch directory contents
   const fetchDirectory = async (path: string) => {
@@ -77,6 +79,15 @@ export function DirectoryBrowser({ onSelect, onClose, initialPath }: DirectoryBr
 
   const breadcrumbs = getBreadcrumbs();
 
+  // Filter entries based on search query
+  const filteredEntries = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return entries;
+    }
+    const query = searchQuery.toLowerCase();
+    return entries.filter(entry => entry.name.toLowerCase().includes(query));
+  }, [entries, searchQuery]);
+
   return (
     <div
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
@@ -87,15 +98,55 @@ export function DirectoryBrowser({ onSelect, onClose, initialPath }: DirectoryBr
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border">
-          <h2 className="text-lg font-semibold">Browse Directories</h2>
-          <button
-            onClick={onClose}
-            className="p-1 hover:bg-accent rounded transition-colors"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5" />
-          </button>
+        <div className="p-4 border-b border-border space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Browse Directories</h2>
+            <button
+              onClick={onClose}
+              className="p-1 hover:bg-accent rounded transition-colors"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Search and View Toggle */}
+          <div className="flex items-center gap-2">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search directories..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+            </div>
+            <div className="flex border border-border rounded-md overflow-hidden">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-2 transition-colors ${
+                  viewMode === 'grid'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'hover:bg-accent'
+                }`}
+                title="Grid view"
+              >
+                <Grid3x3 className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-2 transition-colors ${
+                  viewMode === 'list'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'hover:bg-accent'
+                }`}
+                title="List view"
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Breadcrumb Navigation */}
@@ -153,12 +204,12 @@ export function DirectoryBrowser({ onSelect, onClose, initialPath }: DirectoryBr
           )}
 
           {!loading && !error && entries.length > 0 && (
-            <div className="space-y-1">
+            <>
               {/* Parent directory link */}
               {parentPath && (
                 <button
                   onClick={navigateToParent}
-                  className="w-full flex items-center gap-2 p-3 hover:bg-accent rounded-md transition-colors text-left"
+                  className="w-full flex items-center gap-2 p-3 mb-2 hover:bg-accent rounded-md transition-colors text-left"
                 >
                   <Folder className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                   <span className="flex-1 font-medium">..</span>
@@ -166,33 +217,72 @@ export function DirectoryBrowser({ onSelect, onClose, initialPath }: DirectoryBr
                 </button>
               )}
 
-              {/* Directory entries */}
-              {entries.map((entry) => (
-                <button
-                  key={entry.path}
-                  onClick={() => navigateTo(entry.path)}
-                  className="w-full flex items-center gap-2 p-3 hover:bg-accent rounded-md transition-colors text-left group"
-                >
-                  <Folder className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-                  <span className="flex-1 truncate">{entry.name}</span>
+              {/* No results message */}
+              {filteredEntries.length === 0 && searchQuery && (
+                <div className="text-center py-8 text-muted-foreground">
+                  No directories found matching "{searchQuery}"
+                </div>
+              )}
 
-                  {/* Git badge */}
-                  {entry.isGitRepository && entry.gitInfo && (
-                    <div
-                      className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-500 flex-shrink-0"
-                      title={`Branch: ${entry.gitInfo.branch || 'unknown'}\nRemote: ${entry.gitInfo.remote || 'none'}`}
+              {/* List View */}
+              {viewMode === 'list' && filteredEntries.length > 0 && (
+                <div className="space-y-1">
+                  {filteredEntries.map((entry) => (
+                    <button
+                      key={entry.path}
+                      onClick={() => navigateTo(entry.path)}
+                      className="w-full flex items-center gap-2 p-3 hover:bg-accent rounded-md transition-colors text-left group"
                     >
-                      <GitBranch className="w-4 h-4" />
-                      {entry.gitInfo.branch && (
-                        <span className="max-w-[100px] truncate">
+                      <Folder className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                      <span className="flex-1 truncate">{entry.name}</span>
+
+                      {/* Git badge */}
+                      {entry.isGitRepository && entry.gitInfo && (
+                        <div
+                          className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-500 flex-shrink-0"
+                          title={`Branch: ${entry.gitInfo.branch || 'unknown'}\nRemote: ${entry.gitInfo.remote || 'none'}`}
+                        >
+                          <GitBranch className="w-4 h-4" />
+                          {entry.gitInfo.branch && (
+                            <span className="max-w-[100px] truncate">
+                              {entry.gitInfo.branch}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Grid View */}
+              {viewMode === 'grid' && filteredEntries.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {filteredEntries.map((entry) => (
+                    <button
+                      key={entry.path}
+                      onClick={() => navigateTo(entry.path)}
+                      className="flex flex-col items-center p-3 hover:bg-accent rounded-md transition-colors group"
+                    >
+                      <div className="relative mb-2">
+                        <Folder className="w-12 h-12 text-blue-400" />
+                        {entry.isGitRepository && (
+                          <GitBranch className="absolute -bottom-1 -right-1 w-4 h-4 text-green-600 dark:text-green-500 bg-background rounded-full p-0.5" />
+                        )}
+                      </div>
+                      <span className="text-sm text-center truncate w-full px-1" title={entry.name}>
+                        {entry.name}
+                      </span>
+                      {entry.isGitRepository && entry.gitInfo?.branch && (
+                        <span className="text-xs text-green-600 dark:text-green-500 mt-0.5 truncate w-full px-1" title={entry.gitInfo.branch}>
                           {entry.gitInfo.branch}
                         </span>
                       )}
-                    </div>
-                  )}
-                </button>
-              ))}
-            </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
 
