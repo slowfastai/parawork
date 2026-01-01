@@ -7,6 +7,8 @@ import { getConfig } from '../config/settings.js';
 /**
  * API Key authentication middleware
  * Validates the X-API-Key header or api_key query parameter
+ *
+ * For local development, authentication is skipped for localhost connections
  */
 export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
   const config = getConfig();
@@ -16,7 +18,20 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
     return next();
   }
 
-  // Get API key from header or query
+  // Skip auth for localhost connections (local development mode)
+  const host = req.hostname || req.headers.host || '';
+  const isLocalhost = host === 'localhost'
+    || host === '127.0.0.1'
+    || host.startsWith('localhost:')
+    || host.startsWith('127.0.0.1:')
+    || host === '0.0.0.0'
+    || host.startsWith('0.0.0.0:');
+
+  if (isLocalhost) {
+    return next();
+  }
+
+  // For remote connections, require API key
   const apiKey = req.headers['x-api-key'] as string | undefined
     || req.query.api_key as string | undefined;
 

@@ -6,6 +6,7 @@ import { X } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAppStore } from '../stores/appStore';
 import type { AgentType } from '@parawork/shared';
+import { DirectoryBrowser } from './DirectoryBrowser';
 
 interface NewWorkspaceDialogProps {
   onClose: () => void;
@@ -16,6 +17,7 @@ export function NewWorkspaceDialog({ onClose }: NewWorkspaceDialogProps) {
   const [path, setPath] = useState('');
   const [agentType, setAgentType] = useState<AgentType>('claude-code');
   const [creating, setCreating] = useState(false);
+  const [showBrowser, setShowBrowser] = useState(false);
 
   const addWorkspace = useAppStore((state) => state.addWorkspace);
   const setFocusedWorkspace = useAppStore((state) => state.setFocusedWorkspace);
@@ -76,14 +78,23 @@ export function NewWorkspaceDialog({ onClose }: NewWorkspaceDialogProps) {
             <label className="block text-sm font-medium mb-1">
               Project Path
             </label>
-            <input
-              type="text"
-              value={path}
-              onChange={(e) => setPath(e.target.value)}
-              placeholder="/path/to/project"
-              className="w-full px-3 py-2 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-              required
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={path}
+                onChange={(e) => setPath(e.target.value)}
+                placeholder="/path/to/project"
+                className="flex-1 px-3 py-2 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowBrowser(true)}
+                className="px-4 py-2 border border-border rounded-md hover:bg-accent transition-colors whitespace-nowrap"
+              >
+                Browse...
+              </button>
+            </div>
             <p className="text-xs text-muted-foreground mt-1">
               Absolute path to your project directory
             </p>
@@ -121,6 +132,17 @@ export function NewWorkspaceDialog({ onClose }: NewWorkspaceDialogProps) {
           </div>
         </form>
       </div>
+
+      {/* Directory Browser */}
+      {showBrowser && (
+        <DirectoryBrowser
+          onSelect={(selectedPath) => {
+            setPath(selectedPath);
+            setShowBrowser(false);
+          }}
+          onClose={() => setShowBrowser(false)}
+        />
+      )}
     </div>
   );
 }
