@@ -15,8 +15,9 @@ const execAsync = promisify(exec);
  */
 async function getGitBranch(dirPath: string): Promise<string | null> {
   try {
-    const { stdout } = await execAsync(
-      `git -C "${dirPath}" rev-parse --abbrev-ref HEAD`,
+    const { stdout } = await execFileAsync(
+      'git',
+      ['-C', dirPath, 'rev-parse', '--abbrev-ref', 'HEAD'],
       { timeout: 500 }
     );
     return stdout.trim() || null;
