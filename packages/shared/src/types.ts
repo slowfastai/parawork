@@ -88,6 +88,7 @@ export interface DirectoryEntry {
   isGitRepository: boolean;
   gitInfo?: GitInfo;
   lastModified: number;
+  itemCount?: number;
 }
 
 /**

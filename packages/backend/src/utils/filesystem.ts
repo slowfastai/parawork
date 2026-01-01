@@ -90,12 +90,23 @@ export async function listDirectories(dirPath: string): Promise<DirectoryEntry[]
         const stats = await stat(fullPath);
         const gitInfo = await getGitInfo(fullPath);
 
+        // Count items in directory
+        let itemCount: number | undefined;
+        try {
+          const items = await readdir(fullPath);
+          itemCount = items.length;
+        } catch (error) {
+          // If we can't read the directory, skip item count
+          itemCount = undefined;
+        }
+
         const entry: DirectoryEntry = {
           name: dir.name,
           path: fullPath,
           isDirectory: true,
           isGitRepository: gitInfo !== null,
           lastModified: stats.mtimeMs,
+          itemCount,
         };
 
         if (gitInfo) {
