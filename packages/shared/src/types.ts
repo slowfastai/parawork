@@ -71,6 +71,35 @@ export interface AgentLog {
 }
 
 /**
+ * GitInfo represents git repository metadata
+ */
+export interface GitInfo {
+  branch: string | null;
+  remote: string | null;
+}
+
+/**
+ * DirectoryEntry represents a directory with git detection
+ */
+export interface DirectoryEntry {
+  name: string;
+  path: string;
+  isDirectory: true;
+  isGitRepository: boolean;
+  gitInfo?: GitInfo;
+  lastModified: number;
+}
+
+/**
+ * BrowseResponse represents the response from directory browsing
+ */
+export interface BrowseResponse {
+  currentPath: string;
+  parentPath: string | null;
+  entries: DirectoryEntry[];
+}
+
+/**
  * WebSocket event types
  */
 export type WebSocketEventType =

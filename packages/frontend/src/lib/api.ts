@@ -12,6 +12,7 @@ import type {
   CreateSessionRequest,
   SendMessageRequest,
   ApiResponse,
+  BrowseResponse,
 } from '@parawork/shared';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
@@ -145,5 +146,13 @@ export const api = {
         return false;
       }
     },
+  },
+
+  // Filesystem
+  filesystem: {
+    browse: (path?: string) =>
+      fetchApi<BrowseResponse>(
+        `/fs/browse${path ? `?path=${encodeURIComponent(path)}` : ''}`
+      ),
   },
 };

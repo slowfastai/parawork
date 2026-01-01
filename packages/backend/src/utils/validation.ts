@@ -1,8 +1,9 @@
 /**
  * Validation utilities
  */
-import { existsSync, statSync } from 'fs';
+import { existsSync, statSync, accessSync, constants } from 'fs';
 import { resolve, normalize, isAbsolute } from 'path';
+import { homedir } from 'os';
 
 /**
  * Validate a workspace path
@@ -78,6 +79,94 @@ export function validateWorkspacePath(path: string): { valid: boolean; error?: s
   }
 
   return { valid: true };
+}
+
+/**
+ * Validate a path for directory browsing
+ * More permissive than validateWorkspacePath:
+ * - Allows tilde (~) expansion
+ * - Allows user directories
+ * - Blocks only critical system directories
+ */
+export function validateBrowsePath(path: string): {
+  valid: boolean;
+  error?: string;
+  normalized?: string;
+} {
+  // Must be a non-empty string
+  if (!path || typeof path !== 'string') {
+    return { valid: false, error: 'Path is required' };
+  }
+
+  // Trim whitespace
+  let trimmedPath = path.trim();
+
+  // Expand tilde to home directory
+  if (trimmedPath === '~' || trimmedPath.startsWith('~/')) {
+    trimmedPath = trimmedPath.replace(/^~/, homedir());
+  }
+
+  // Check for path traversal attempts
+  if (trimmedPath.includes('..')) {
+    return { valid: false, error: 'Path traversal not allowed' };
+  }
+
+  // Must be an absolute path after tilde expansion
+  if (!isAbsolute(trimmedPath)) {
+    return { valid: false, error: 'Path must be absolute' };
+  }
+
+  // Normalize the path
+  const normalizedPath = normalize(trimmedPath);
+
+  // Block only critical system directories
+  const criticalSystemPaths = [
+    '/etc',
+    '/var',
+    '/usr',
+    '/bin',
+    '/sbin',
+    '/lib',
+    '/boot',
+    '/dev',
+    '/proc',
+    '/sys',
+    '/System/Library',
+    'C:\\Windows',
+    'C:\\Program Files',
+    'C:\\Program Files (x86)',
+  ];
+
+  const lowerPath = normalizedPath.toLowerCase();
+  for (const blocked of criticalSystemPaths) {
+    if (lowerPath === blocked.toLowerCase() || lowerPath.startsWith(blocked.toLowerCase() + '/')) {
+      return { valid: false, error: 'System directories are not allowed' };
+    }
+  }
+
+  // Check if path exists
+  if (!existsSync(normalizedPath)) {
+    return { valid: false, error: 'Path does not exist' };
+  }
+
+  // Check if path is a directory
+  try {
+    const stats = statSync(normalizedPath);
+    if (!stats.isDirectory()) {
+      return { valid: false, error: 'Path must be a directory' };
+    }
+  } catch (error) {
+    return { valid: false, error: 'Cannot access path' };
+  }
+
+  // Check read permissions
+  try {
+    accessSync(normalizedPath, constants.R_OK);
+  } catch (error) {
+    return { valid: false, error: 'No read permission for this directory' };
+  }
+
+  return { valid: true, normalized: normalizedPath };
 }
 
 /**

@@ -76,3 +76,7 @@ export const AgentLogSchema = z.object({
   level: LogLevelSchema,
   message: z.string(),
 });
+
+export const BrowseRequestSchema = z.object({
+  path: z.string().optional(),
+});

@@ -8,6 +8,7 @@ import { initWebSocketServer, closeWebSocketServer } from './api/websocket.js';
 import workspacesRouter from './api/routes/workspaces.js';
 import sessionsRouter from './api/routes/sessions.js';
 import systemRouter from './api/routes/system.js';
+import filesystemRouter from './api/routes/filesystem.js';
 import { authMiddleware } from './middleware/auth.js';
 import { rateLimitMiddleware } from './middleware/rateLimit.js';
 import { getConfig } from './config/settings.js';
@@ -51,6 +52,7 @@ export function createApp() {
   app.use('/api/workspaces', workspacesRouter);
   app.use('/api', sessionsRouter);
   app.use('/api', systemRouter);
+  app.use('/api/fs', filesystemRouter);
 
   // 404 handler
   app.use('/api', (req, res) => {
