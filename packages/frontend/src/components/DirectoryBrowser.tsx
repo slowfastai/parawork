@@ -2,7 +2,7 @@
  * Directory Browser Component
  * Allows users to visually browse and select project directories
  */
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Folder, GitBranch, X, Home, ChevronRight, Grid3x3, List, Search } from 'lucide-react';
 import { api } from '../lib/api';
 import type { DirectoryEntry } from '@parawork/shared';
@@ -46,10 +46,10 @@ export function DirectoryBrowser({ onSelect, onClose, initialPath }: DirectoryBr
   }, []);
 
   // Navigate to a new directory
-  const navigateTo = (path: string) => {
+  const navigateTo = useCallback((path: string) => {
     setSelectedEntry(null); // Clear selection when navigating
     fetchDirectory(path);
-  };
+  }, []);
 
   // Navigate to parent directory
   const navigateToParent = () => {
@@ -71,6 +71,11 @@ export function DirectoryBrowser({ onSelect, onClose, initialPath }: DirectoryBr
   // Handle keyboard events
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore key events from input fields to prevent conflicts
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
       if (e.key === 'Enter' && selectedEntry) {
         // Enter key navigates into the selected folder
         navigateTo(selectedEntry.path);
@@ -79,7 +84,7 @@ export function DirectoryBrowser({ onSelect, onClose, initialPath }: DirectoryBr
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedEntry]);
+  }, [selectedEntry, navigateTo]);
 
   // Parse breadcrumb segments from path
   const getBreadcrumbs = () => {
