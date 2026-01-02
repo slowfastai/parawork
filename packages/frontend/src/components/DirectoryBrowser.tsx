@@ -2,7 +2,7 @@
  * Directory Browser Component
  * Allows users to visually browse and select project directories
  */
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Folder, GitBranch, X, Home, ChevronRight, Grid3x3, List, Search } from 'lucide-react';
 import { api } from '../lib/api';
 import type { DirectoryEntry } from '@parawork/shared';
@@ -21,6 +21,7 @@ export function DirectoryBrowser({ onSelect, onClose, initialPath }: DirectoryBr
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedEntry, setSelectedEntry] = useState<DirectoryEntry | null>(null);
 
   // Fetch directory contents
   const fetchDirectory = async (path: string) => {
@@ -45,9 +46,10 @@ export function DirectoryBrowser({ onSelect, onClose, initialPath }: DirectoryBr
   }, []);
 
   // Navigate to a new directory
-  const navigateTo = (path: string) => {
+  const navigateTo = useCallback((path: string) => {
+    setSelectedEntry(null); // Clear selection when navigating
     fetchDirectory(path);
-  };
+  }, []);
 
   // Navigate to parent directory
   const navigateToParent = () => {
@@ -55,6 +57,34 @@ export function DirectoryBrowser({ onSelect, onClose, initialPath }: DirectoryBr
       navigateTo(parentPath);
     }
   };
+
+  // Handle single-click: select folder
+  const handleSingleClick = (entry: DirectoryEntry) => {
+    setSelectedEntry(entry);
+  };
+
+  // Handle double-click: navigate into folder
+  const handleDoubleClick = (entry: DirectoryEntry) => {
+    navigateTo(entry.path);
+  };
+
+  // Handle keyboard events
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore key events from input fields to prevent conflicts
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      if (e.key === 'Enter' && selectedEntry) {
+        // Enter key navigates into the selected folder
+        navigateTo(selectedEntry.path);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedEntry, navigateTo]);
 
   // Parse breadcrumb segments from path
   const getBreadcrumbs = () => {
@@ -230,8 +260,13 @@ export function DirectoryBrowser({ onSelect, onClose, initialPath }: DirectoryBr
                   {filteredEntries.map((entry) => (
                     <button
                       key={entry.path}
-                      onClick={() => navigateTo(entry.path)}
-                      className="w-full flex items-center gap-2 p-3 hover:bg-accent rounded-md transition-colors text-left group"
+                      onClick={() => handleSingleClick(entry)}
+                      onDoubleClick={() => handleDoubleClick(entry)}
+                      className={`w-full flex items-center gap-2 p-3 rounded-md transition-colors text-left group ${
+                        selectedEntry?.path === entry.path
+                          ? 'bg-primary/20 border-2 border-primary'
+                          : 'hover:bg-accent border-2 border-transparent'
+                      }`}
                     >
                       <Folder className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                       <span className="flex-1 truncate">{entry.name}</span>
@@ -253,8 +288,13 @@ export function DirectoryBrowser({ onSelect, onClose, initialPath }: DirectoryBr
                   {filteredEntries.map((entry) => (
                     <button
                       key={entry.path}
-                      onClick={() => navigateTo(entry.path)}
-                      className="flex flex-col items-center p-3 hover:bg-accent rounded-md transition-colors group"
+                      onClick={() => handleSingleClick(entry)}
+                      onDoubleClick={() => handleDoubleClick(entry)}
+                      className={`flex flex-col items-center p-3 rounded-md transition-colors group ${
+                        selectedEntry?.path === entry.path
+                          ? 'bg-primary/20 border-2 border-primary'
+                          : 'hover:bg-accent border-2 border-transparent'
+                      }`}
                     >
                       <div className="relative mb-2">
                         <Folder className="w-12 h-12 text-blue-400" />
@@ -278,8 +318,8 @@ export function DirectoryBrowser({ onSelect, onClose, initialPath }: DirectoryBr
 
         {/* Footer */}
         <div className="flex items-center justify-between p-4 border-t border-border bg-muted/30">
-          <div className="text-sm text-muted-foreground truncate max-w-[60%]" title={currentPath}>
-            {currentPath}
+          <div className="text-sm text-muted-foreground truncate max-w-[60%]" title={selectedEntry?.path || currentPath}>
+            {selectedEntry ? selectedEntry.path : currentPath}
           </div>
           <div className="flex gap-2">
             <button
@@ -289,8 +329,13 @@ export function DirectoryBrowser({ onSelect, onClose, initialPath }: DirectoryBr
               Cancel
             </button>
             <button
-              onClick={() => onSelect(currentPath)}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+              onClick={() => selectedEntry && onSelect(selectedEntry.path)}
+              disabled={!selectedEntry}
+              className={`px-4 py-2 rounded-md transition-colors ${
+                selectedEntry
+                  ? 'bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer'
+                  : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+              }`}
             >
               Select This Folder
             </button>
