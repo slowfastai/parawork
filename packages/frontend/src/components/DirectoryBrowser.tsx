@@ -236,18 +236,10 @@ export function DirectoryBrowser({ onSelect, onClose, initialPath }: DirectoryBr
                       <Folder className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                       <span className="flex-1 truncate">{entry.name}</span>
 
-                      {/* Git badge */}
-                      {entry.isGitRepository && entry.gitInfo && (
-                        <div
-                          className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-500 flex-shrink-0"
-                          title={`Branch: ${entry.gitInfo.branch || 'unknown'}\nRemote: ${entry.gitInfo.remote || 'none'}`}
-                        >
-                          <GitBranch className="w-4 h-4" />
-                          {entry.gitInfo.branch && (
-                            <span className="max-w-[100px] truncate">
-                              {entry.gitInfo.branch}
-                            </span>
-                          )}
+                      {/* Git repository indicator (icon only, no branch name) */}
+                      {entry.isGitRepository && (
+                        <div title="Git repository" className="flex-shrink-0">
+                          <GitBranch className="w-4 h-4 text-green-600 dark:text-green-500" />
                         </div>
                       )}
                     </button>
@@ -266,18 +258,16 @@ export function DirectoryBrowser({ onSelect, onClose, initialPath }: DirectoryBr
                     >
                       <div className="relative mb-2">
                         <Folder className="w-12 h-12 text-blue-400" />
+                        {/* Git repository indicator badge (icon only, no branch name) */}
                         {entry.isGitRepository && (
-                          <GitBranch className="absolute -bottom-1 -right-1 w-4 h-4 text-green-600 dark:text-green-500 bg-background rounded-full p-0.5" />
+                          <div title="Git repository" className="absolute -bottom-1 -right-1">
+                            <GitBranch className="w-4 h-4 text-green-600 dark:text-green-500 bg-background rounded-full p-0.5" />
+                          </div>
                         )}
                       </div>
                       <span className="text-sm text-center truncate w-full px-1" title={entry.name}>
                         {entry.name}
                       </span>
-                      {entry.isGitRepository && entry.gitInfo?.branch && (
-                        <span className="text-xs text-green-600 dark:text-green-500 mt-0.5 truncate w-full px-1" title={entry.gitInfo.branch}>
-                          {entry.gitInfo.branch}
-                        </span>
-                      )}
                     </button>
                   ))}
                 </div>
