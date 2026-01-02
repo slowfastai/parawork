@@ -252,7 +252,7 @@ The `DirectoryBrowser` component (`packages/frontend/src/components/DirectoryBro
   - Just `pnpm dev` and access via browser
 - **Git-aware**: Shows visual indicators for git repositories
   - Green GitBranch icon badge indicates a folder is a git repository
-  - **No branch names displayed** - not needed for worktree workflow (always work from main)
+- **No branch names displayed** - not needed for worktree workflow (as workspaces are created from main)
   - Helps users quickly identify git projects without clutter
 
 **Features:**
