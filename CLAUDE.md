@@ -256,6 +256,16 @@ The `DirectoryBrowser` component (`packages/frontend/src/components/DirectoryBro
   - Helps users quickly identify git projects without clutter
 
 **Features:**
+- **Cross-platform native interaction model**:
+  - Single-click to select a folder (highlights it)
+  - Double-click to navigate into a folder
+  - Enter key navigates into selected folder
+  - Matches macOS Finder, Windows Explorer, and Linux file manager behavior
+- **Smart selection UI**:
+  - Visual highlighting for selected folders (primary color border and background)
+  - "Select This Folder" button is disabled (gray) when nothing selected
+  - Button becomes enabled (bright blue) when a folder is selected
+  - Footer displays selected folder path
 - Grid and list view modes
 - Search/filter directories
 - Breadcrumb navigation
