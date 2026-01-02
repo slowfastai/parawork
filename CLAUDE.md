@@ -101,6 +101,12 @@ packages/
 - Users focus on **ONE** workspace at a time, while others run in the background
 - The UI uses `focusedWorkspaceId` in Zustand store to track which workspace is being viewed
 
+**Git Worktree Workflow:**
+- Workspaces are created from the **main branch** using git worktrees
+- Each workspace is an isolated worktree for a specific task/feature
+- Base project should always be on main branch when creating new workspaces
+- This allows multiple agents to work on different features simultaneously without conflicts
+
 #### 2. Real-Time Communication
 - **WebSocket** for bidirectional real-time updates (logs, status changes, messages)
 - **REST API** for CRUD operations (create workspace, start session, etc)
@@ -185,6 +191,7 @@ Config is auto-generated on first run with defaults. Edit this file to customize
 - `src/stores/appStore.ts` - Global state (workspaces, focused workspace)
 - `src/hooks/useWebSocket.ts` - WebSocket connection and event handling
 - `src/lib/api.ts` - REST API client functions
+- `src/components/DirectoryBrowser.tsx` - Directory picker with git repository indicators
 
 **Shared:**
 - `src/types.ts` - All TypeScript interfaces and types
@@ -228,3 +235,34 @@ Config is auto-generated on first run with defaults. Edit this file to customize
 - **Database locks**: SQLite is in WAL mode but still has limits on concurrent writes
 - **WebSocket auth**: Must include API key from `config.json` in connection URL
 - **CORS**: Add frontend URL to `config.json` cors.origins if running on different port
+
+## UI Components
+
+### Directory Browser
+
+The `DirectoryBrowser` component (`packages/frontend/src/components/DirectoryBrowser.tsx`) is a web-based folder picker used when creating new workspaces.
+
+**Design Philosophy:**
+- **Web-native**: Backend-driven browsing via API, not native OS dialogs
+  - Web apps have browser security restrictions that prevent accessing absolute file paths via native `<input type="file">` dialogs
+  - Backend has full filesystem access and can provide absolute paths reliably
+  - Cross-platform consistent UX (Mac/Windows/Linux)
+- **Lightweight**: Keeps parawork as a terminal-style tool (like Claude Code, Codex CLI)
+  - No Electron or desktop app overhead
+  - Just `pnpm dev` and access via browser
+- **Git-aware**: Shows visual indicators for git repositories
+  - Green GitBranch icon badge indicates a folder is a git repository
+  - **No branch names displayed** - not needed for worktree workflow (always work from main)
+  - Helps users quickly identify git projects without clutter
+
+**Features:**
+- Grid and list view modes
+- Search/filter directories
+- Breadcrumb navigation
+- Git repository visual indicators (icon badge only, no branch names)
+- Backend-driven directory listing for reliable absolute paths
+
+**Why not native Finder/Explorer?**
+- Native OS dialogs require Electron (converts web app to desktop app)
+- Browser security prevents web apps from getting absolute paths via `<input webkitdirectory>`
+- Current approach keeps parawork lightweight and web-based
