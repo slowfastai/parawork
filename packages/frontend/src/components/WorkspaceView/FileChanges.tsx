@@ -1,34 +1,53 @@
 /**
  * File Changes - Display file modifications by agent
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, Dispatch, SetStateAction } from 'react';
 import { FileText, FilePlus, FileX } from 'lucide-react';
 import { api } from '../../lib/api';
+import { useWebSocket } from '../../hooks/useWebSocket';
 import type { Session, FileChange } from '@parawork/shared';
 
 interface FileChangesProps {
   session: Session | null;
   changes: FileChange[];
-  onChangesUpdate: (changes: FileChange[]) => void;
+  onChangesUpdate: Dispatch<SetStateAction<FileChange[]>>;
 }
 
 export function FileChanges({ session, changes, onChangesUpdate }: FileChangesProps) {
-  // Store callback in ref to avoid dependency issues
-  const onChangesUpdateRef = useRef(onChangesUpdate);
-  onChangesUpdateRef.current = onChangesUpdate;
+  const { subscribe } = useWebSocket();
 
   useEffect(() => {
     if (!session?.id) {
-      onChangesUpdateRef.current([]);
+      onChangesUpdate([]);
       return;
     }
 
     // Load file changes for this session
     const sessionId = session.id;
     api.sessions.getChanges(sessionId)
-      .then((loadedChanges) => onChangesUpdateRef.current(loadedChanges))
+      .then((loadedChanges) => onChangesUpdate(loadedChanges))
       .catch(console.error);
-  }, [session?.id]);
+  }, [session?.id, onChangesUpdate]);
+
+  // Subscribe to real-time file change events via WebSocket
+  useEffect(() => {
+    if (!session?.id) return;
+
+    const sessionId = session.id;
+    return subscribe((event) => {
+      if (event.type === 'file_changed' && event.data.sessionId === sessionId) {
+        const newChange: FileChange = {
+          id: Date.now(), // Temporary ID
+          sessionId: event.data.sessionId,
+          filePath: event.data.filePath,
+          changeType: event.data.changeType,
+          diff: null,
+          timestamp: event.data.timestamp,
+        };
+        onChangesUpdate((prevChanges) => [newChange, ...prevChanges]);
+      }
+    });
+  }, [session?.id, subscribe, onChangesUpdate]);
 
   return (
     <div className="flex flex-col h-full">

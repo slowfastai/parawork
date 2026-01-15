@@ -64,6 +64,12 @@ router.get('/browse', async (req, res) => {
   } catch (error) {
     console.error('Error browsing directory:', error);
 
+    // Log the actual error details
+    if (error instanceof Error) {
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+    }
+
     // Check for specific error types
     if (error instanceof Error) {
       if (error.message.includes('EACCES') || error.message.includes('EPERM')) {

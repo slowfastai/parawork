@@ -18,10 +18,11 @@ async function getGitBranch(dirPath: string): Promise<string | null> {
     const { stdout } = await execFileAsync(
       'git',
       ['-C', dirPath, 'rev-parse', '--abbrev-ref', 'HEAD'],
-      { timeout: 500 }
+      { timeout: 1000 }
     );
     return stdout.trim() || null;
   } catch (error) {
+    // Git command failed - not a git repo or no permission
     return null;
   }
 }
@@ -34,10 +35,11 @@ async function getGitRemote(dirPath: string): Promise<string | null> {
     const { stdout } = await execFileAsync(
       'git',
       ['-C', dirPath, 'config', '--get', 'remote.origin.url'],
-      { timeout: 500 }
+      { timeout: 1000 }
     );
     return stdout.trim() || null;
   } catch (error) {
+    // Git command failed - not a git repo or no permission
     return null;
   }
 }
@@ -52,13 +54,17 @@ export async function getGitInfo(dirPath: string): Promise<GitInfo | null> {
     return null;
   }
 
-  // Get branch and remote in parallel
+  // Get branch and remote in parallel with individual error handling
   try {
+    const branchPromise = getGitBranch(dirPath);
+    const remotePromise = getGitRemote(dirPath);
+
     const [branch, remote] = await Promise.all([
-      getGitBranch(dirPath),
-      getGitRemote(dirPath),
+      branchPromise.catch(() => null),
+      remotePromise.catch(() => null),
     ]);
 
+    // Only return git info if we found at least some info
     return { branch, remote };
   } catch (error) {
     return null;
@@ -120,7 +126,10 @@ export async function listDirectories(dirPath: string): Promise<DirectoryEntry[]
       }
     });
 
-    const results = await Promise.all(directoryPromises);
+    const results: (DirectoryEntry | null)[] = await Promise.all(directoryPromises).catch((error) => {
+      console.error('Error processing directories:', error);
+      return [];
+    });
 
     // Filter out null entries (directories we couldn't access)
     return results.filter((entry): entry is DirectoryEntry => entry !== null);

@@ -2,7 +2,7 @@
  * Global application store using Zustand
  */
 import { create } from 'zustand';
-import type { Workspace } from '@parawork/shared';
+import type { Workspace, Session } from '@parawork/shared';
 
 interface AppState {
   // Workspaces
@@ -15,6 +15,11 @@ interface AppState {
   // Focused workspace (the ONE workspace currently being viewed)
   focusedWorkspaceId: string | null;
   setFocusedWorkspace: (id: string | null) => void;
+
+  // Active sessions (workspaceId -> session mapping)
+  sessions: Record<string, Session>;
+  setCurrentSession: (workspaceId: string, session: Session | null) => void;
+  removeSession: (workspaceId: string) => void;
 
   // WebSocket connection status
   wsConnected: boolean;
@@ -40,11 +45,32 @@ export const useAppStore = create<AppState>((set) => ({
       workspaces: state.workspaces.filter((ws) => ws.id !== id),
       focusedWorkspaceId:
         state.focusedWorkspaceId === id ? null : state.focusedWorkspaceId,
+      // Also remove session for this workspace
+      sessions: Object.fromEntries(
+        Object.entries(state.sessions).filter(([wsId]) => wsId !== id)
+      ),
     })),
 
   // Focused workspace
   focusedWorkspaceId: null,
   setFocusedWorkspace: (id) => set({ focusedWorkspaceId: id }),
+
+  // Sessions
+  sessions: {},
+  setCurrentSession: (workspaceId, session) =>
+    set((state) => ({
+      sessions: session
+        ? { ...state.sessions, [workspaceId]: session }
+        : Object.fromEntries(
+            Object.entries(state.sessions).filter(([wsId]) => wsId !== workspaceId)
+          ),
+    })),
+  removeSession: (workspaceId) =>
+    set((state) => ({
+      sessions: Object.fromEntries(
+        Object.entries(state.sessions).filter(([wsId]) => wsId !== workspaceId)
+      ),
+    })),
 
   // WebSocket connection
   wsConnected: false,

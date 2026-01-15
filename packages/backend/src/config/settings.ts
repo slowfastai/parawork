@@ -42,6 +42,12 @@ const DEFAULT_CONFIG: Config = {
     gitIntegration: true,
     autoCleanup: true,
   },
+  git: {
+    worktreeBaseDir: '~/.parawork/workspaces',
+    branchPrefix: 'parawork/',
+    baseBranch: 'origin/main',
+    requireCleanRepo: false,
+  },
 };
 
 let config: Config | null = null;

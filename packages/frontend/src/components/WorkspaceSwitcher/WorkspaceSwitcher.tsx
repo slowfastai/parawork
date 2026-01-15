@@ -1,7 +1,7 @@
 /**
  * Workspace Switcher - Sidebar for switching between workspaces
  */
-import { Plus, Folder, Circle, CheckCircle, XCircle, Loader } from 'lucide-react';
+import { Plus, Folder, Circle, CheckCircle, XCircle, Loader, GitBranch } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
 import type { Workspace, WorkspaceStatus } from '@parawork/shared';
 
@@ -86,6 +86,12 @@ function WorkspaceItem({ workspace, isFocused, onClick }: WorkspaceItemProps) {
         <span className="font-medium truncate flex-1">{workspace.name}</span>
         <StatusIcon status={workspace.status} />
       </div>
+      {workspace.gitWorktree && (
+        <div className="flex items-center gap-1 text-xs opacity-75 mb-1">
+          <GitBranch className="w-3 h-3 flex-shrink-0" />
+          <span className="truncate">{workspace.gitWorktree.branchName}</span>
+        </div>
+      )}
       <p className="text-xs opacity-75 truncate">{workspace.path}</p>
     </button>
   );

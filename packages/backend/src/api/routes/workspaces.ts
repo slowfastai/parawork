@@ -5,8 +5,9 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { workspaceQueries } from '../../db/queries.js';
 import { CreateWorkspaceRequestSchema, UpdateWorkspaceRequestSchema } from '@parawork/shared';
-import type { ApiResponse, Workspace } from '@parawork/shared';
+import type { ApiResponse, Workspace, GitWorktreeMetadata } from '@parawork/shared';
 import { validateWorkspacePath } from '../../utils/validation.js';
+import { createGitWorktree, cleanupGitWorktree } from '../../utils/git.js';
 
 const router = Router();
 
@@ -36,7 +37,7 @@ router.get('/', (req, res) => {
  * POST /api/workspaces
  * Create a new workspace
  */
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     // Validate request body schema
     const validation = CreateWorkspaceRequestSchema.safeParse(req.body);
@@ -61,17 +62,40 @@ router.post('/', (req, res) => {
       return res.status(400).json(response);
     }
 
+    // Attempt to create git worktree
+    const worktreeResult = await createGitWorktree(path, name);
+
+    let workspacePath = path;
+    let gitWorktree: GitWorktreeMetadata | undefined;
+
+    if (worktreeResult.success && worktreeResult.info) {
+      // Use worktree path as workspace path
+      workspacePath = worktreeResult.info.worktreePath;
+      gitWorktree = {
+        worktreePath: worktreeResult.info.worktreePath,
+        branchName: worktreeResult.info.branchName,
+        baseRepoPath: worktreeResult.info.baseRepoPath,
+        baseBranch: worktreeResult.info.baseBranch,
+        createdAt: Date.now(),
+      };
+      console.log(`Created workspace with git worktree: ${worktreeResult.info.branchName}`);
+    } else {
+      // Fallback to regular workspace
+      console.log(`Creating regular workspace (git worktree failed: ${worktreeResult.error})`);
+    }
+
     const now = Date.now();
 
     const workspace: Workspace = {
       id: uuidv4(),
       name,
-      path,
+      path: workspacePath,
       status: 'idle',
       agentType: agentType || null,
       createdAt: now,
       updatedAt: now,
       lastFocusedAt: now, // Set as focused when created
+      gitWorktree,
     };
 
     const created = workspaceQueries.create(workspace);
@@ -166,8 +190,32 @@ router.patch('/:id', (req, res) => {
  * DELETE /api/workspaces/:id
  * Delete workspace
  */
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
+    const workspace = workspaceQueries.getById(req.params.id);
+
+    if (!workspace) {
+      const response: ApiResponse = {
+        success: false,
+        error: 'Workspace not found',
+      };
+      return res.status(404).json(response);
+    }
+
+    // Cleanup git worktree if exists
+    if (workspace.gitWorktree) {
+      const cleaned = await cleanupGitWorktree(
+        workspace.gitWorktree.worktreePath,
+        workspace.gitWorktree.branchName,
+        workspace.gitWorktree.baseRepoPath
+      );
+
+      if (!cleaned) {
+        console.warn(`Failed to cleanup git worktree for workspace ${workspace.id}`);
+        // Don't block deletion, just log warning
+      }
+    }
+
     const deleted = workspaceQueries.delete(req.params.id);
 
     if (!deleted) {

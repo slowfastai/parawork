@@ -21,6 +21,8 @@ export function NewWorkspaceDialog({ onClose }: NewWorkspaceDialogProps) {
 
   const addWorkspace = useAppStore((state) => state.addWorkspace);
   const setFocusedWorkspace = useAppStore((state) => state.setFocusedWorkspace);
+  const updateWorkspace = useAppStore((state) => state.updateWorkspace);
+  const setCurrentSession = useAppStore((state) => state.setCurrentSession);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,6 +39,38 @@ export function NewWorkspaceDialog({ onClose }: NewWorkspaceDialogProps) {
 
       addWorkspace(workspace);
       setFocusedWorkspace(workspace.id);
+
+      // Auto-start the session immediately after creating workspace
+      const session = await api.sessions.create(workspace.id, {
+        agentType,
+      });
+
+      // Store the session in the global store so WorkspaceView can use it
+      setCurrentSession(workspace.id, session);
+
+      // Update workspace status in store to match backend
+      updateWorkspace(workspace.id, { status: 'running' });
+
+      // Automatically open Terminal.app with the running session
+      try {
+        await api.sessions.openInTerminal(session.id);
+      } catch (error) {
+        console.error('Failed to open terminal:', error);
+      }
+
+      // Show success message with worktree info if created
+      if (workspace.gitWorktree) {
+        alert(
+          `✅ Workspace created and terminal opened!\n\n` +
+          `📁 Worktree: ${workspace.gitWorktree.worktreePath}\n` +
+          `🌿 Branch: ${workspace.gitWorktree.branchName}\n` +
+          `📍 Base repo: ${workspace.gitWorktree.baseRepoPath}\n\n` +
+          `Your agent is now running in Terminal.app.`
+        );
+      } else {
+        alert(`✅ Workspace "${workspace.name}" created and terminal opened!`);
+      }
+
       onClose();
     } catch (error) {
       console.error('Error creating workspace:', error);
@@ -96,7 +130,7 @@ export function NewWorkspaceDialog({ onClose }: NewWorkspaceDialogProps) {
               </button>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Absolute path to your project directory
+              Select a git repository to auto-create a worktree, or any directory for a regular workspace
             </p>
           </div>
 

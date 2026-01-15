@@ -20,6 +20,29 @@ export function App() {
 
   const { send, subscribe } = useWebSocket();
 
+  // Initialize API key from backend on first load
+  useEffect(() => {
+    const initApiKey = async () => {
+      const stored = localStorage.getItem('parawork_api_key');
+      if (!stored) {
+        try {
+          // Fetch API key from backend config
+          const response = await fetch('http://localhost:3000/api/config');
+          if (response.ok) {
+            const config = await response.json();
+            if (config.data?.apiKey) {
+              localStorage.setItem('parawork_api_key', config.data.apiKey);
+              console.log('API key initialized from backend');
+            }
+          }
+        } catch (error) {
+          console.warn('Could not fetch API key from backend:', error);
+        }
+      }
+    };
+    initApiKey();
+  }, []);
+
   // Load workspaces on mount
   useEffect(() => {
     api.workspaces

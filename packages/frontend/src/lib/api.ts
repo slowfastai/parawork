@@ -53,12 +53,28 @@ async function fetchApi<T>(
     },
   });
 
-  // Handle authentication errors
-  if (response.status === 401 || response.status === 403) {
-    throw new Error('Authentication failed. Please check your API key.');
+  // Handle HTTP errors
+  if (!response.ok) {
+    // Try to parse error response as JSON
+    const text = await response.text();
+    if (text) {
+      try {
+        const errorData = JSON.parse(text);
+        throw new Error(errorData.error || `HTTP ${response.status}: Request failed`);
+      } catch {
+        throw new Error(`HTTP ${response.status}: ${text || 'Request failed'}`);
+      }
+    }
+    throw new Error(`HTTP ${response.status}: Request failed`);
   }
 
-  const data: ApiResponse<T> = await response.json();
+  // Handle empty responses
+  const text = await response.text();
+  if (!text) {
+    throw new Error('Empty response from server');
+  }
+
+  const data: ApiResponse<T> = JSON.parse(text);
 
   if (!data.success) {
     throw new Error(data.error || 'API request failed');
@@ -100,6 +116,9 @@ export const api = {
         body: JSON.stringify(data),
       }),
 
+    list: (workspaceId: string) =>
+      fetchApi<Session[]>(`/workspaces/${workspaceId}/sessions`),
+
     get: (id: string) => fetchApi<Session>(`/sessions/${id}`),
 
     stop: (id: string) =>
@@ -123,6 +142,17 @@ export const api = {
 
     getChanges: (id: string) =>
       fetchApi<FileChange[]>(`/sessions/${id}/changes`),
+
+    sendInput: (id: string, input: string) =>
+      fetchApi<void>(`/sessions/${id}/input`, {
+        method: 'POST',
+        body: JSON.stringify({ input }),
+      }),
+
+    openInTerminal: (id: string) =>
+      fetchApi<void>(`/sessions/${id}/open-terminal`, {
+        method: 'POST',
+      }),
   },
 
   // System

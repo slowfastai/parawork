@@ -18,8 +18,33 @@ import type {
   FileChange,
   AgentLog,
 } from '@parawork/shared';
+import { stopAgent, startAgent, sendToAgent } from '../../agents/monitor.js';
+import { getConfig } from '../../config/settings.js';
 
 const router = Router();
+
+/**
+ * GET /api/workspaces/:id/sessions
+ * Get all sessions for a workspace
+ */
+router.get('/workspaces/:id/sessions', (req, res) => {
+  try {
+    const sessions = sessionQueries.getByWorkspaceId(req.params.id);
+
+    const response: ApiResponse<Session[]> = {
+      success: true,
+      data: sessions,
+    };
+    res.json(response);
+  } catch (error) {
+    console.error('Error fetching sessions:', error);
+    const response: ApiResponse = {
+      success: false,
+      error: 'Failed to fetch sessions',
+    };
+    res.status(500).json(response);
+  }
+});
 
 /**
  * POST /api/workspaces/:id/sessions
@@ -90,8 +115,34 @@ router.post('/workspaces/:id/sessions', async (req, res) => {
       messageQueries.create(message);
     }
 
-    // TODO: Start agent process here
-    // For now, just return the session
+    // Start agent process
+    const config = getConfig();
+    const agentConfig = config.agents[agentType];
+
+    if (!agentConfig || !agentConfig.enabled) {
+      const response: ApiResponse = {
+        success: false,
+        error: `Agent type ${agentType} is not enabled`,
+      };
+      return res.status(400).json(response);
+    }
+
+    const started = startAgent(
+      session.id,
+      workspaceId,
+      agentType,
+      workspace.path,
+      agentConfig.command,
+      agentConfig.defaultArgs
+    );
+
+    if (!started) {
+      const response: ApiResponse = {
+        success: false,
+        error: 'Failed to start agent process',
+      };
+      return res.status(500).json(response);
+    }
 
     const response: ApiResponse<Session> = {
       success: true,
@@ -155,7 +206,12 @@ router.post('/sessions/:id/stop', (req, res) => {
       return res.status(404).json(response);
     }
 
-    // TODO: Kill the agent process
+    // Kill the agent process (graceful shutdown with SIGTERM, then SIGKILL if needed)
+    const stopped = stopAgent(session.id);
+
+    if (!stopped) {
+      console.warn(`No active process found for session ${session.id}, updating database anyway`);
+    }
 
     // Update session status
     const updated = sessionQueries.update(session.id, {
@@ -178,6 +234,132 @@ router.post('/sessions/:id/stop', (req, res) => {
     const response: ApiResponse = {
       success: false,
       error: 'Failed to stop session',
+    };
+    res.status(500).json(response);
+  }
+});
+
+/**
+ * POST /api/sessions/:id/input
+ * Send input to running session
+ */
+router.post('/sessions/:id/input', (req, res) => {
+  try {
+    const session = sessionQueries.getById(req.params.id);
+
+    if (!session) {
+      const response: ApiResponse = {
+        success: false,
+        error: 'Session not found',
+      };
+      return res.status(404).json(response);
+    }
+
+    if (session.status !== 'running') {
+      const response: ApiResponse = {
+        success: false,
+        error: 'Session is not running',
+      };
+      return res.status(400).json(response);
+    }
+
+    const { input } = req.body;
+    if (typeof input !== 'string') {
+      const response: ApiResponse = {
+        success: false,
+        error: 'Input must be a string',
+      };
+      return res.status(400).json(response);
+    }
+
+    const sent = sendToAgent(session.id, input);
+
+    if (!sent) {
+      const response: ApiResponse = {
+        success: false,
+        error: 'Failed to send input to agent',
+      };
+      return res.status(500).json(response);
+    }
+
+    const response: ApiResponse = {
+      success: true,
+      data: null,
+    };
+    res.json(response);
+  } catch (error) {
+    console.error('Error sending input to session:', error);
+    const response: ApiResponse = {
+      success: false,
+      error: 'Failed to send input',
+    };
+    res.status(500).json(response);
+  }
+});
+
+/**
+ * POST /api/sessions/:id/open-terminal
+ * Open session in native Terminal.app (macOS)
+ */
+router.post('/sessions/:id/open-terminal', (req, res) => {
+  try {
+    const session = sessionQueries.getById(req.params.id);
+
+    if (!session) {
+      const response: ApiResponse = {
+        success: false,
+        error: 'Session not found',
+      };
+      return res.status(404).json(response);
+    }
+
+    const workspace = workspaceQueries.getById(session.workspaceId);
+    if (!workspace) {
+      const response: ApiResponse = {
+        success: false,
+        error: 'Workspace not found',
+      };
+      return res.status(404).json(response);
+    }
+
+    // Get agent config
+    const config = getConfig();
+    const agentConfig = config.agents[session.agentType];
+    if (!agentConfig || !agentConfig.enabled) {
+      const response: ApiResponse = {
+        success: false,
+        error: 'Agent not configured',
+      };
+      return res.status(400).json(response);
+    }
+
+    // Build command to run in Terminal
+    const command = agentConfig.command;
+    const args = agentConfig.defaultArgs || [];
+    const fullCommand = [command, ...args].join(' ');
+
+    // AppleScript to open Terminal and run command
+    const script = `
+      tell application "Terminal"
+        activate
+        do script "cd ${workspace.path.replace(/"/g, '\\"')} && ${fullCommand}"
+      end tell
+    `;
+
+    // Execute AppleScript
+    const { execSync } = require('child_process');
+    execSync(`osascript -e '${script.replace(/'/g, "'\\''")}'`);
+
+    const response: ApiResponse = {
+      success: true,
+      data: null,
+    };
+    res.json(response);
+  } catch (error) {
+    console.error('Error opening terminal:', error);
+    const response: ApiResponse = {
+      success: false,
+      error: 'Failed to open terminal',
     };
     res.status(500).json(response);
   }
@@ -266,7 +448,11 @@ router.post('/sessions/:id/messages', (req, res) => {
 
     const created = messageQueries.create(message);
 
-    // TODO: Send message to agent process
+    // Send message to agent process
+    const sent = sendToAgent(session.id, validation.data.content);
+    if (!sent) {
+      console.warn(`Failed to send message to agent for session ${session.id}`);
+    }
 
     const response: ApiResponse<Message> = {
       success: true,

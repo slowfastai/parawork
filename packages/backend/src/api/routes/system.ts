@@ -54,13 +54,12 @@ router.get('/agents', (req, res) => {
 
 /**
  * GET /api/config
- * Get configuration (excluding sensitive data)
+ * Get configuration (including API key for WebSocket auth)
  */
 router.get('/config', (req, res) => {
   try {
     const config = getConfig();
 
-    // Remove sensitive data
     const safeConfig = {
       server: {
         port: config.server.port,
@@ -68,6 +67,7 @@ router.get('/config', (req, res) => {
       },
       agents: config.agents,
       features: config.features,
+      apiKey: config.security.apiKey, // Include API key for WebSocket authentication
     };
 
     const response: ApiResponse = {

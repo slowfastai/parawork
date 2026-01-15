@@ -28,6 +28,12 @@ interface WorkspaceRow {
   created_at: number;
   updated_at: number;
   last_focused_at: number | null;
+  // Git worktree fields
+  git_worktree_path: string | null;
+  git_branch_name: string | null;
+  git_base_repo_path: string | null;
+  git_base_branch: string | null;
+  git_created_at: number | null;
 }
 
 interface SessionRow {
@@ -69,7 +75,7 @@ interface AgentLogRow {
  * Convert database row to Workspace model
  */
 function rowToWorkspace(row: WorkspaceRow): Workspace {
-  return {
+  const workspace: Workspace = {
     id: row.id,
     name: row.name,
     path: row.path,
@@ -79,6 +85,19 @@ function rowToWorkspace(row: WorkspaceRow): Workspace {
     updatedAt: row.updated_at,
     lastFocusedAt: row.last_focused_at,
   };
+
+  // Add git worktree metadata if exists
+  if (row.git_worktree_path && row.git_branch_name && row.git_base_repo_path) {
+    workspace.gitWorktree = {
+      worktreePath: row.git_worktree_path,
+      branchName: row.git_branch_name,
+      baseRepoPath: row.git_base_repo_path,
+      baseBranch: row.git_base_branch || 'origin/main',
+      createdAt: row.git_created_at || row.created_at,
+    };
+  }
+
+  return workspace;
 }
 
 /**
@@ -156,8 +175,11 @@ export const workspaceQueries = {
   create(workspace: Workspace): Workspace {
     const db = getDatabase();
     const stmt = db.prepare(`
-      INSERT INTO workspaces (id, name, path, status, agent_type, created_at, updated_at, last_focused_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO workspaces (
+        id, name, path, status, agent_type, created_at, updated_at, last_focused_at,
+        git_worktree_path, git_branch_name, git_base_repo_path, git_base_branch, git_created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -168,7 +190,12 @@ export const workspaceQueries = {
       workspace.agentType,
       workspace.createdAt,
       workspace.updatedAt,
-      workspace.lastFocusedAt
+      workspace.lastFocusedAt,
+      workspace.gitWorktree?.worktreePath || null,
+      workspace.gitWorktree?.branchName || null,
+      workspace.gitWorktree?.baseRepoPath || null,
+      workspace.gitWorktree?.baseBranch || null,
+      workspace.gitWorktree?.createdAt || null
     );
 
     return workspace;

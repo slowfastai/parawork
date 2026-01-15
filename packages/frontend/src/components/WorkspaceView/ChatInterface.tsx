@@ -1,38 +1,55 @@
 /**
  * Chat Interface - Chat with agent
  */
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Dispatch, SetStateAction } from 'react';
 import { Send } from 'lucide-react';
 import { api } from '../../lib/api';
+import { useWebSocket } from '../../hooks/useWebSocket';
 import type { Session, Message } from '@parawork/shared';
 
 interface ChatInterfaceProps {
   session: Session | null;
   messages: Message[];
-  onMessagesUpdate: (messages: Message[]) => void;
+  onMessagesUpdate: Dispatch<SetStateAction<Message[]>>;
 }
 
 export function ChatInterface({ session, messages, onMessagesUpdate }: ChatInterfaceProps) {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Store callback in ref to avoid dependency issues
-  const onMessagesUpdateRef = useRef(onMessagesUpdate);
-  onMessagesUpdateRef.current = onMessagesUpdate;
+  const { subscribe } = useWebSocket();
 
   useEffect(() => {
     if (!session?.id) {
-      onMessagesUpdateRef.current([]);
+      onMessagesUpdate([]);
       return;
     }
 
     // Load messages for this session
     const sessionId = session.id;
     api.sessions.getMessages(sessionId)
-      .then((msgs) => onMessagesUpdateRef.current(msgs))
+      .then((msgs) => onMessagesUpdate(msgs))
       .catch(console.error);
-  }, [session?.id]);
+  }, [session?.id, onMessagesUpdate]);
+
+  // Subscribe to real-time message events via WebSocket
+  useEffect(() => {
+    if (!session?.id) return;
+
+    const sessionId = session.id;
+    return subscribe((event) => {
+      if (event.type === 'agent_message' && event.data.sessionId === sessionId) {
+        const newMessage: Message = {
+          id: `${Date.now()}`, // Temporary ID
+          sessionId: event.data.sessionId,
+          role: event.data.role,
+          content: event.data.content,
+          timestamp: event.data.timestamp,
+        };
+        onMessagesUpdate((prevMessages) => [...prevMessages, newMessage]);
+      }
+    });
+  }, [session?.id, subscribe, onMessagesUpdate]);
 
   useEffect(() => {
     // Auto-scroll to bottom

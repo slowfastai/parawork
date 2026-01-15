@@ -10,7 +10,13 @@ CREATE TABLE IF NOT EXISTS workspaces (
   agent_type TEXT CHECK(agent_type IN ('claude-code', 'codex') OR agent_type IS NULL),
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
-  last_focused_at INTEGER
+  last_focused_at INTEGER,
+  -- Git worktree metadata (nullable for backward compatibility)
+  git_worktree_path TEXT,
+  git_branch_name TEXT,
+  git_base_repo_path TEXT,
+  git_base_branch TEXT,
+  git_created_at INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_workspaces_status ON workspaces(status);
