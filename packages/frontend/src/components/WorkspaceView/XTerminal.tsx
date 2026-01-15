@@ -6,7 +6,7 @@ import { useEffect, useRef } from 'react';
 import { Terminal } from 'xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal as TerminalIcon, AlertCircle } from 'lucide-react';
-import { useWebSocket } from '../../hooks/useWebSocket';
+import { useWebSocket } from '../../contexts/WebSocketContext';
 import type { Session, ServerToClientEvent } from '@parawork/shared';
 import 'xterm/css/xterm.css';
 
@@ -67,6 +67,31 @@ export function XTerminal({ session }: XTerminalProps) {
     xtermRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
+    // Write welcome message to confirm terminal is working
+    terminal.writeln('\x1b[32m[Parawork Terminal Ready]\x1b[0m');
+    terminal.writeln('Waiting for session to connect...');
+    terminal.writeln('Click here and try typing - you should see characters appear.');
+    terminal.writeln('');
+
+    // Debug: log when terminal receives/loses focus
+    if (terminal.textarea) {
+      console.log('[XTerminal] Textarea element found:', terminal.textarea);
+      terminal.textarea.addEventListener('focus', () => {
+        console.log('[XTerminal] Terminal textarea focused');
+      });
+      terminal.textarea.addEventListener('blur', () => {
+        console.log('[XTerminal] Terminal textarea blurred');
+      });
+    } else {
+      console.log('[XTerminal] WARNING: No textarea element found after open()');
+    }
+
+    // Auto-focus the terminal after a short delay
+    setTimeout(() => {
+      console.log('[XTerminal] Auto-focusing terminal on mount');
+      terminal.focus();
+    }, 200);
+
     // Handle terminal resize
     const handleResize = () => {
       if (fitAddonRef.current && xtermRef.current) {
@@ -96,24 +121,47 @@ export function XTerminal({ session }: XTerminalProps) {
     };
   }, []);
 
-  // Handle user input - send to backend
+  // Handle user input - send to backend (or local echo if no session)
   useEffect(() => {
-    if (!xtermRef.current || !session?.id) return;
+    if (!xtermRef.current) {
+      console.log('[XTerminal] Input handler not set up: no terminal');
+      return;
+    }
 
     const terminal = xtermRef.current;
-    const sessionId = session.id;
+    const sessionId = session?.id;
+
+    console.log('[XTerminal] Setting up input handler:', { sessionId: sessionId || 'LOCAL_ECHO' });
 
     const disposable = terminal.onData((data) => {
-      send({
-        type: 'terminal_input',
-        data: {
-          sessionId,
-          data,
-        },
-      });
+      if (sessionId) {
+        // Send to backend when session exists
+        console.log('[XTerminal] Sending input:', { sessionId, data: data.substring(0, 20) });
+        const sent = send({
+          type: 'terminal_input',
+          data: {
+            sessionId,
+            data,
+          },
+        });
+        console.log('[XTerminal] Input sent result:', sent);
+      } else {
+        // Local echo mode when no session - just to test input capture
+        console.log('[XTerminal] Local echo (no session):', data.substring(0, 20));
+        // Echo the input locally so user can see typing works
+        if (data === '\r') {
+          terminal.writeln('');
+        } else if (data === '\x7f') {
+          // Backspace
+          terminal.write('\b \b');
+        } else {
+          terminal.write(data);
+        }
+      }
     });
 
     return () => {
+      console.log('[XTerminal] Disposing input handler');
       disposable.dispose();
     };
   }, [session?.id, send]);
@@ -123,9 +171,11 @@ export function XTerminal({ session }: XTerminalProps) {
     if (!session?.id) return;
 
     const sessionId = session.id;
+    console.log('[XTerminal] Subscribing to terminal data for session:', sessionId);
 
     return subscribe((event: ServerToClientEvent) => {
       if (event.type === 'terminal_data' && event.data.sessionId === sessionId) {
+        console.log('[XTerminal] Received terminal data:', event.data.data.substring(0, 50));
         if (xtermRef.current) {
           xtermRef.current.write(event.data.data);
         }
@@ -155,18 +205,43 @@ export function XTerminal({ session }: XTerminalProps) {
     return () => clearTimeout(timer);
   }, [session?.id, send]);
 
-  // Focus terminal when session becomes active
+  // Focus terminal when session becomes active or when session exists
   useEffect(() => {
-    if (session?.status === 'running' && xtermRef.current) {
-      xtermRef.current.focus();
+    console.log('[XTerminal] Focus effect triggered:', { sessionId: session?.id, sessionStatus: session?.status, hasTerminal: !!xtermRef.current });
+    if (session?.id && xtermRef.current) {
+      // Focus with a small delay to ensure DOM is ready
+      setTimeout(() => {
+        console.log('[XTerminal] Focusing terminal');
+        xtermRef.current?.focus();
+      }, 50);
     }
-  }, [session?.status]);
+  }, [session?.id, session?.status]);
 
-  // Clear terminal when session changes
-  useEffect(() => {
+  // Handle click to focus terminal
+  const handleTerminalClick = () => {
+    console.log('[XTerminal] Click detected, attempting to focus');
     if (xtermRef.current) {
-      xtermRef.current.clear();
+      xtermRef.current.focus();
+      // Also try focusing the textarea directly
+      const textarea = xtermRef.current.textarea;
+      if (textarea) {
+        console.log('[XTerminal] Focusing textarea directly');
+        textarea.focus();
+      } else {
+        console.log('[XTerminal] No textarea found!');
+      }
     }
+  };
+
+  // Clear terminal only when switching to a different session (not on first load)
+  const prevSessionIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (session?.id && prevSessionIdRef.current && prevSessionIdRef.current !== session.id) {
+      if (xtermRef.current) {
+        xtermRef.current.clear();
+      }
+    }
+    prevSessionIdRef.current = session?.id || null;
   }, [session?.id]);
 
   return (
@@ -175,9 +250,15 @@ export function XTerminal({ session }: XTerminalProps) {
         <div className="flex items-center gap-2">
           <TerminalIcon className="w-4 h-4" />
           <h3 className="text-sm font-semibold">Terminal</h3>
-          {session?.status === 'running' && (
-            <span className="px-2 py-0.5 text-xs bg-green-500/20 text-green-400 rounded-full">
-              Running
+          {session ? (
+            <span className={`px-2 py-0.5 text-xs rounded-full ${
+              session.status === 'running' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
+            }`}>
+              {session.status} (id: {session.id.slice(0, 8)})
+            </span>
+          ) : (
+            <span className="px-2 py-0.5 text-xs bg-red-500/20 text-red-400 rounded-full">
+              No Session
             </span>
           )}
         </div>
@@ -201,15 +282,17 @@ export function XTerminal({ session }: XTerminalProps) {
 
       <div
         ref={terminalRef}
-        className="flex-1 overflow-hidden min-w-0"
-        style={{ padding: '8px', backgroundColor: '#1a1a2e' }}
+        className="flex-1"
+        style={{
+          padding: '8px',
+          backgroundColor: '#1a1a2e',
+          minHeight: '300px',
+          position: 'relative'
+        }}
+        onClick={handleTerminalClick}
       />
 
-      {!session && (
-        <div className="absolute inset-0 flex items-center justify-center bg-background/80">
-          <p className="text-muted-foreground">No active session</p>
-        </div>
-      )}
+      {/* Removed overlay - it was blocking terminal input */}
     </div>
   );
 }

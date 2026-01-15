@@ -6,7 +6,7 @@
 import { useEffect, useRef, Dispatch, SetStateAction } from 'react';
 import { Terminal as TerminalIcon, AlertCircle, ExternalLink } from 'lucide-react';
 import { api } from '../../lib/api';
-import { useWebSocket } from '../../hooks/useWebSocket';
+import { useWebSocket } from '../../contexts/WebSocketContext';
 import type { Session, AgentLog } from '@parawork/shared';
 
 interface LogStreamProps {

@@ -4,7 +4,7 @@
  */
 import { useState, useEffect } from 'react';
 import { useAppStore } from '../../stores/appStore';
-import { useWebSocket } from '../../hooks/useWebSocket';
+import { useWebSocket } from '../../contexts/WebSocketContext';
 import { api } from '../../lib/api';
 import { FileChanges } from './FileChanges';
 import { XTerminal } from './XTerminal';
@@ -71,6 +71,13 @@ export function WorkspaceView() {
   // Also handle failed sessions to display error messages
   // _Requirements: 2.4, 4.2_
   useEffect(() => {
+    console.log('[WorkspaceView] Session loading effect:', {
+      workspaceId: workspace?.id,
+      workspaceStatus: workspace?.status,
+      storedSessions: Object.keys(sessions),
+      storedSessionForWorkspace: workspace?.id ? sessions[workspace.id] : null,
+    });
+
     if (!workspace) {
       setSession(null);
       return;
@@ -78,6 +85,7 @@ export function WorkspaceView() {
 
     // Only load if workspace is running or has error
     if (workspace.status !== 'running' && workspace.status !== 'error') {
+      console.log('[WorkspaceView] Workspace not running, setting session to null');
       setSession(null);
       return;
     }
@@ -85,6 +93,7 @@ export function WorkspaceView() {
     // Check appStore for session first (set by NewWorkspaceDialog)
     const storedSession = sessions[workspace.id];
     if (storedSession && (storedSession.status === 'running' || storedSession.status === 'starting' || storedSession.status === 'failed')) {
+      console.log('[WorkspaceView] Found stored session:', storedSession);
       setSession(storedSession);
       return;
     }

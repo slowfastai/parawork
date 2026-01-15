@@ -4,7 +4,7 @@
 import { useEffect, Dispatch, SetStateAction } from 'react';
 import { FileText, FilePlus, FileX } from 'lucide-react';
 import { api } from '../../lib/api';
-import { useWebSocket } from '../../hooks/useWebSocket';
+import { useWebSocket } from '../../contexts/WebSocketContext';
 import type { Session, FileChange } from '@parawork/shared';
 
 interface FileChangesProps {

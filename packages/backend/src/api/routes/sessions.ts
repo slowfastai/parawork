@@ -144,9 +144,12 @@ router.post('/workspaces/:id/sessions', async (req, res) => {
       return res.status(500).json(response);
     }
 
+    // Fetch the updated session (startAgent updates status to 'running')
+    const updatedSession = sessionQueries.getById(session.id);
+
     const response: ApiResponse<Session> = {
       success: true,
-      data: created,
+      data: updatedSession || created,
     };
     res.status(201).json(response);
   } catch (error) {

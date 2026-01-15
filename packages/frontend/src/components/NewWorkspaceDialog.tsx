@@ -51,27 +51,14 @@ export function NewWorkspaceDialog({ onClose }: NewWorkspaceDialogProps) {
       // Update workspace status in store to match backend
       updateWorkspace(workspace.id, { status: 'running' });
 
-      // Automatically open Terminal.app with the running session
-      try {
-        await api.sessions.openInTerminal(session.id);
-      } catch (error) {
-        console.error('Failed to open terminal:', error);
-      }
-
-      // Show success message with worktree info if created
-      if (workspace.gitWorktree) {
-        alert(
-          `✅ Workspace created and terminal opened!\n\n` +
-          `📁 Worktree: ${workspace.gitWorktree.worktreePath}\n` +
-          `🌿 Branch: ${workspace.gitWorktree.branchName}\n` +
-          `📍 Base repo: ${workspace.gitWorktree.baseRepoPath}\n\n` +
-          `Your agent is now running in Terminal.app.`
-        );
-      } else {
-        alert(`✅ Workspace "${workspace.name}" created and terminal opened!`);
-      }
-
+      // Close dialog immediately (no alert to block the flow)
       onClose();
+
+      console.log('[NewWorkspaceDialog] Workspace created:', {
+        workspaceId: workspace.id,
+        sessionId: session.id,
+        sessionStatus: session.status
+      });
     } catch (error) {
       console.error('Error creating workspace:', error);
       alert('Failed to create workspace');

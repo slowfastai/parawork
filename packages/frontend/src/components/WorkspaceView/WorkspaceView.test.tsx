@@ -27,11 +27,12 @@ vi.mock('../../lib/api', () => ({
 }));
 
 // Mock the useWebSocket hook to prevent WebSocket connection attempts
-vi.mock('../../hooks/useWebSocket', () => ({
+vi.mock('../../contexts/WebSocketContext', () => ({
   useWebSocket: vi.fn().mockReturnValue({
-    isConnected: false,
-    subscribe: vi.fn(),
-    unsubscribe: vi.fn(),
+    connected: false,
+    subscribe: vi.fn().mockReturnValue(() => {}),
+    send: vi.fn(),
+    reset: vi.fn(),
   }),
 }));
 
