@@ -170,7 +170,7 @@ export function XTerminal({ session }: XTerminalProps) {
   }, [session?.id]);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full w-full min-w-0 overflow-hidden">
       <div className="p-3 border-b border-border flex items-center justify-between">
         <div className="flex items-center gap-2">
           <TerminalIcon className="w-4 h-4" />
@@ -201,7 +201,7 @@ export function XTerminal({ session }: XTerminalProps) {
 
       <div
         ref={terminalRef}
-        className="flex-1 overflow-hidden"
+        className="flex-1 overflow-hidden min-w-0"
         style={{ padding: '8px', backgroundColor: '#1a1a2e' }}
       />
 
