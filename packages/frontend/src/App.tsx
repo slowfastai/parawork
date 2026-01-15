@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { WorkspaceSwitcher } from './components/WorkspaceSwitcher/WorkspaceSwitcher';
 import { WorkspaceView } from './components/WorkspaceView/WorkspaceView';
 import { NewWorkspaceDialog } from './components/NewWorkspaceDialog';
-import { useWebSocket } from './hooks/useWebSocket';
+import { useWebSocket } from './contexts/WebSocketContext';
 import { useAppStore } from './stores/appStore';
 import { api } from './lib/api';
 
@@ -17,31 +17,41 @@ export function App() {
   const updateWorkspace = useAppStore((state) => state.updateWorkspace);
   const focusedWorkspaceId = useAppStore((state) => state.focusedWorkspaceId);
   const setFocusedWorkspace = useAppStore((state) => state.setFocusedWorkspace);
+  const wsConnected = useAppStore((state) => state.wsConnected);
 
-  const { send, subscribe } = useWebSocket();
+  const { send, subscribe, reset } = useWebSocket();
 
   // Initialize API key from backend on first load
+  // IMPORTANT: After storing the key, we must reset the WebSocket to reconnect with the key
   useEffect(() => {
     const initApiKey = async () => {
       const stored = localStorage.getItem('parawork_api_key');
+      console.log('[App] Checking API key, stored:', stored ? 'yes' : 'no');
       if (!stored) {
         try {
-          // Fetch API key from backend config
-          const response = await fetch('http://localhost:3000/api/config');
+          // Fetch API key from backend config (use relative URL for Vite proxy)
+          console.log('[App] Fetching API key from backend...');
+          const response = await fetch('/api/config');
+          console.log('[App] Config response status:', response.status);
           if (response.ok) {
             const config = await response.json();
+            console.log('[App] Config received, has apiKey:', !!config.data?.apiKey);
             if (config.data?.apiKey) {
               localStorage.setItem('parawork_api_key', config.data.apiKey);
-              console.log('API key initialized from backend');
+              console.log('[App] API key stored, resetting WebSocket...');
+              // Reset WebSocket to reconnect with the new API key
+              reset();
             }
           }
         } catch (error) {
-          console.warn('Could not fetch API key from backend:', error);
+          console.error('[App] Error fetching API key:', error);
         }
+      } else {
+        console.log('[App] API key already in localStorage');
       }
     };
     initApiKey();
-  }, []);
+  }, [reset]);
 
   // Load workspaces on mount
   useEffect(() => {
@@ -100,21 +110,35 @@ export function App() {
   }, [subscribe, updateWorkspace]);
 
   // Subscribe to focused workspace on WebSocket
+  // IMPORTANT: Must depend on wsConnected to retry subscription after reconnect
   useEffect(() => {
-    if (focusedWorkspaceId) {
+    console.log('[App] Subscription effect running:', { focusedWorkspaceId, wsConnected });
+
+    if (!focusedWorkspaceId) {
+      console.log('[App] No workspace focused, skipping subscription');
+      return;
+    }
+
+    if (!wsConnected) {
+      console.log('[App] WebSocket not connected, skipping subscription');
+      return;
+    }
+
+    console.log('[App] Subscribing to workspace:', focusedWorkspaceId);
+    const sent = send({
+      type: 'subscribe_workspace',
+      data: { workspaceId: focusedWorkspaceId },
+    });
+    console.log('[App] Subscribe message sent:', sent);
+
+    return () => {
+      console.log('[App] Cleanup: Unsubscribing from workspace:', focusedWorkspaceId);
       send({
-        type: 'subscribe_workspace',
+        type: 'unsubscribe_workspace',
         data: { workspaceId: focusedWorkspaceId },
       });
-
-      return () => {
-        send({
-          type: 'unsubscribe_workspace',
-          data: { workspaceId: focusedWorkspaceId },
-        });
-      };
-    }
-  }, [focusedWorkspaceId, send]);
+    };
+  }, [focusedWorkspaceId, wsConnected, send]);
 
   if (loading) {
     return (

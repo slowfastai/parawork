@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, Dispatch, SetStateAction } from 'react';
 import { Send } from 'lucide-react';
 import { api } from '../../lib/api';
-import { useWebSocket } from '../../hooks/useWebSocket';
+import { useWebSocket } from '../../contexts/WebSocketContext';
 import type { Session, Message } from '@parawork/shared';
 
 interface ChatInterfaceProps {
