@@ -3,7 +3,6 @@
  * Terminal-focused design: shows full terminal when session is active
  */
 import { useState, useEffect } from 'react';
-import { Square, Trash2 } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { api } from '../../lib/api';
@@ -14,10 +13,8 @@ import type { Session, FileChange, ServerToClientEvent } from '@parawork/shared'
 export function WorkspaceView() {
   const focusedWorkspaceId = useAppStore((state) => state.focusedWorkspaceId);
   const workspaces = useAppStore((state) => state.workspaces);
-  const removeWorkspace = useAppStore((state) => state.removeWorkspace);
   const sessions = useAppStore((state) => state.sessions);
   const setCurrentSession = useAppStore((state) => state.setCurrentSession);
-  const removeSession = useAppStore((state) => state.removeSession);
 
   const { subscribe } = useWebSocket();
 
@@ -127,89 +124,18 @@ export function WorkspaceView() {
     );
   }
 
-  const handleStopSession = async () => {
-    if (!session) return;
-
-    try {
-      await api.sessions.stop(session.id);
-      setSession(null);
-      // Clear from appStore when session is stopped
-      // _Requirements: 3.1, 3.2_
-      if (workspace) {
-        removeSession(workspace.id);
-      }
-    } catch (error) {
-      console.error('Error stopping session:', error);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!confirm(`Delete workspace "${workspace.name}"?`)) return;
-
-    try {
-      await api.workspaces.delete(workspace.id);
-      removeWorkspace(workspace.id);
-    } catch (error) {
-      console.error('Error deleting workspace:', error);
-    }
-  };
-
-  const handleRestart = async () => {
-    try {
-      const newSession = await api.sessions.create(workspace.id, {
-        agentType: workspace.agentType || 'claude-code',
-      });
-      setSession(newSession);
-      // Store in appStore for consistency
-      setCurrentSession(workspace.id, newSession);
-    } catch (error) {
-      console.error('Error restarting session:', error);
-    }
-  };
-
   return (
     <div className="flex-1 flex flex-col h-screen bg-background">
       {/* Header */}
       <div className="border-b border-border p-4">
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <h2 className="text-xl font-semibold">{workspace.name}</h2>
-            <p className="text-sm text-muted-foreground">{workspace.path}</p>
-          </div>
-          <div className="flex gap-2">
-            {session ? (
-              <>
-                <button
-                  onClick={handleStopSession}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
-                >
-                  <Square className="w-4 h-4" />
-                  Stop
-                </button>
-              </>
-            ) : workspace.status === 'idle' ? (
-              <button
-                onClick={handleRestart}
-                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-              >
-                ▶ Restart
-              </button>
-            ) : null}
-            <button
-              onClick={handleDelete}
-              className="p-2 hover:bg-accent rounded-md transition-colors text-muted-foreground hover:text-foreground"
-              title="Delete workspace"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        <h2 className="text-xl font-semibold">{workspace.name}</h2>
+        <p className="text-sm text-muted-foreground">{workspace.path}</p>
       </div>
 
       {/* Terminal-focused Content Area */}
       <div className="flex-1 overflow-hidden flex">
         {/* Main Terminal Area - Full width when active */}
-        <div className={`${session ? 'flex-1' : 'w-full'} flex flex-col relative`}>
+        <div className={`${session ? 'flex-1' : 'w-full'} flex flex-col relative min-w-0 overflow-hidden`}>
           <XTerminal session={session} />
         </div>
 
