@@ -21,6 +21,7 @@ export interface Workspace {
   createdAt: number;
   updatedAt: number;
   lastFocusedAt: number | null;
+  gitWorktree?: GitWorktreeMetadata;
 }
 
 /**
@@ -79,6 +80,17 @@ export interface GitInfo {
 }
 
 /**
+ * GitWorktreeMetadata represents git worktree information for a workspace
+ */
+export interface GitWorktreeMetadata {
+  worktreePath: string;
+  branchName: string;
+  baseRepoPath: string;
+  baseBranch: string;
+  createdAt: number;
+}
+
+/**
  * DirectoryEntry represents a directory with git detection
  */
 export interface DirectoryEntry {
@@ -109,9 +121,12 @@ export type WebSocketEventType =
   | 'agent_message'
   | 'file_changed'
   | 'session_completed'
+  | 'terminal_data'
+  | 'terminal_resize'
   | 'focus_workspace'
   | 'subscribe_workspace'
-  | 'unsubscribe_workspace';
+  | 'unsubscribe_workspace'
+  | 'terminal_input';
 
 /**
  * WebSocket event payloads
@@ -168,6 +183,32 @@ export interface SessionCompletedEvent {
   };
 }
 
+export interface TerminalDataEvent {
+  type: 'terminal_data';
+  data: {
+    sessionId: string;
+    workspaceId: string;
+    data: string; // Raw PTY output with ANSI codes
+  };
+}
+
+export interface TerminalResizeEvent {
+  type: 'terminal_resize';
+  data: {
+    sessionId: string;
+    cols: number;
+    rows: number;
+  };
+}
+
+export interface TerminalInputEvent {
+  type: 'terminal_input';
+  data: {
+    sessionId: string;
+    data: string; // User input to send to PTY
+  };
+}
+
 export interface FocusWorkspaceEvent {
   type: 'focus_workspace';
   data: {
@@ -194,12 +235,15 @@ export type ServerToClientEvent =
   | AgentLogEvent
   | AgentMessageEvent
   | FileChangedEvent
-  | SessionCompletedEvent;
+  | SessionCompletedEvent
+  | TerminalDataEvent;
 
 export type ClientToServerEvent =
   | FocusWorkspaceEvent
   | SubscribeWorkspaceEvent
-  | UnsubscribeWorkspaceEvent;
+  | UnsubscribeWorkspaceEvent
+  | TerminalInputEvent
+  | TerminalResizeEvent;
 
 export type WebSocketEvent = ServerToClientEvent | ClientToServerEvent;
 
@@ -270,6 +314,13 @@ export interface FeaturesConfig {
   autoCleanup: boolean;
 }
 
+export interface GitConfig {
+  worktreeBaseDir: string;
+  branchPrefix: string;
+  baseBranch: string;
+  requireCleanRepo: boolean;
+}
+
 export interface Config {
   server: ServerConfig;
   database: DatabaseConfig;
@@ -277,4 +328,5 @@ export interface Config {
   tunnel: TunnelConfig;
   security: SecurityConfig;
   features: FeaturesConfig;
+  git?: GitConfig;
 }

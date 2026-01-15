@@ -6,6 +6,7 @@ import type { Server, IncomingMessage } from 'http';
 import { z } from 'zod';
 import type { ClientToServerEvent, ServerToClientEvent } from '@parawork/shared';
 import { validateWebSocketAuth } from '../middleware/auth.js';
+import { sendToAgent, resizeTerminal } from '../agents/monitor.js';
 
 // Validation schemas for incoming WebSocket messages
 const FocusWorkspaceSchema = z.object({
@@ -29,10 +30,29 @@ const UnsubscribeWorkspaceSchema = z.object({
   }),
 });
 
+const TerminalInputSchema = z.object({
+  type: z.literal('terminal_input'),
+  data: z.object({
+    sessionId: z.string().uuid(),
+    data: z.string(),
+  }),
+});
+
+const TerminalResizeSchema = z.object({
+  type: z.literal('terminal_resize'),
+  data: z.object({
+    sessionId: z.string().uuid(),
+    cols: z.number().int().min(1).max(500),
+    rows: z.number().int().min(1).max(200),
+  }),
+});
+
 const ClientEventSchema = z.discriminatedUnion('type', [
   FocusWorkspaceSchema,
   SubscribeWorkspaceSchema,
   UnsubscribeWorkspaceSchema,
+  TerminalInputSchema,
+  TerminalResizeSchema,
 ]);
 
 interface ExtendedWebSocket extends WebSocket {
@@ -183,6 +203,22 @@ function handleClientEvent(ws: ExtendedWebSocket, event: ClientToServerEvent): v
       console.log(`Client unsubscribed from workspace: ${event.data.workspaceId}`);
       break;
 
+    case 'terminal_input':
+      // Send input to the PTY process
+      const inputSent = sendToAgent(event.data.sessionId, event.data.data);
+      if (!inputSent) {
+        sendError(ws, 'Failed to send input to terminal');
+      }
+      break;
+
+    case 'terminal_resize':
+      // Resize the PTY
+      const resized = resizeTerminal(event.data.sessionId, event.data.cols, event.data.rows);
+      if (!resized) {
+        console.warn(`Failed to resize terminal for session ${event.data.sessionId}`);
+      }
+      break;
+
     default:
       // This should never happen due to validation, but TypeScript needs it
       const _exhaustive: never = event;
@@ -219,6 +255,7 @@ export function broadcastToWorkspace(workspaceId: string, event: ServerToClientE
   }
 
   const message = JSON.stringify(event);
+  let sentCount = 0;
 
   wss.clients.forEach((ws: WebSocket) => {
     const extWs = ws as ExtendedWebSocket;
@@ -228,8 +265,11 @@ export function broadcastToWorkspace(workspaceId: string, event: ServerToClientE
       extWs.subscribedWorkspaces.has(workspaceId)
     ) {
       ws.send(message);
+      sentCount++;
     }
   });
+
+  console.log(`[WS] Broadcast ${event.type} to workspace ${workspaceId}: ${sentCount} clients`);
 }
 
 /**

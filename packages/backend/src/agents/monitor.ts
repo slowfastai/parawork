@@ -1,34 +1,30 @@
 /**
  * Agent process monitoring with proper cleanup and output limits
+ * Uses node-pty for proper PTY support (interactive terminals like Claude Code)
  */
-import { spawn, ChildProcess } from 'child_process';
+import * as pty from 'node-pty';
+import type { IPty } from 'node-pty';
 import { broadcastToWorkspace } from '../api/websocket.js';
 import { sessionQueries, workspaceQueries, agentLogQueries } from '../db/queries.js';
 import { validateAgentCommand, sanitizeForDisplay } from '../utils/validation.js';
 import type { AgentType } from '@parawork/shared';
 
-// Configuration
-const MAX_OUTPUT_BUFFER_SIZE = 1024 * 1024; // 1MB max buffer per stream
-const MAX_LOG_MESSAGE_LENGTH = 10000; // 10KB max per log message
-const GRACEFUL_SHUTDOWN_TIMEOUT = 5000; // 5 seconds
+const MAX_OUTPUT_BUFFER_SIZE = 1024 * 1024;
+const MAX_LOG_MESSAGE_LENGTH = 10000;
+const GRACEFUL_SHUTDOWN_TIMEOUT = 5000;
 
 interface MonitoredProcess {
   sessionId: string;
   workspaceId: string;
-  process: ChildProcess;
+  ptyProcess: IPty;
   agentType: AgentType;
   shutdownTimeout?: NodeJS.Timeout;
-  outputBuffer: {
-    stdout: string;
-    stderr: string;
-  };
+  outputBuffer: string;
+  outputSize: number;
 }
 
 const activeProcesses = new Map<string, MonitoredProcess>();
 
-/**
- * Start an agent process
- */
 export function startAgent(
   sessionId: string,
   workspaceId: string,
@@ -39,288 +35,172 @@ export function startAgent(
 ): boolean {
   console.log(`Starting ${agentType} agent for session ${sessionId}`);
 
-  // Validate command (whitelist check)
   if (!validateAgentCommand(command)) {
     console.error(`Invalid agent command: ${command}`);
-    sessionQueries.update(sessionId, {
-      status: 'failed',
-      completedAt: Date.now(),
-    });
+    sessionQueries.update(sessionId, { status: 'failed', completedAt: Date.now() });
     return false;
   }
 
-  let proc: ChildProcess;
+  console.log(`[DEBUG] Spawning agent with node-pty:`);
+  console.log(`  Command: ${command}`);
+  console.log(`  Args: ${JSON.stringify(args)}`);
+  console.log(`  Working directory: ${workspacePath}`);
+
+  let ptyProcess: IPty;
   try {
-    proc = spawn(command, args, {
+    ptyProcess = pty.spawn(command, args, {
+      name: 'xterm-256color',
+      cols: 120,
+      rows: 30,
       cwd: workspacePath,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env },
+      env: { ...process.env, TERM: 'xterm-256color' } as { [key: string]: string },
     });
+    console.log(`[DEBUG] PTY spawned with PID: ${ptyProcess.pid}`);
   } catch (error) {
     console.error(`Failed to spawn agent process:`, error);
-    sessionQueries.update(sessionId, {
-      status: 'failed',
-      completedAt: Date.now(),
-    });
+    sessionQueries.update(sessionId, { status: 'failed', completedAt: Date.now() });
     return false;
   }
+
 
   const monitored: MonitoredProcess = {
     sessionId,
     workspaceId,
-    process: proc,
+    ptyProcess,
     agentType,
-    outputBuffer: {
-      stdout: '',
-      stderr: '',
-    },
+    outputBuffer: '',
+    outputSize: 0,
   };
-
   activeProcesses.set(sessionId, monitored);
+  sessionQueries.update(sessionId, { processId: ptyProcess.pid, status: 'running' });
 
-  // Update session with process ID
-  sessionQueries.update(sessionId, {
-    processId: proc.pid,
-    status: 'running',
-  });
-
-  // Handle stdout with buffer limits
-  proc.stdout?.on('data', (data: Buffer) => {
-    handleOutput(monitored, 'info', data);
-  });
-
-  // Handle stderr with buffer limits
-  proc.stderr?.on('data', (data: Buffer) => {
-    handleOutput(monitored, 'error', data);
-  });
-
-  // Handle process exit
-  proc.on('exit', (code: number | null, signal: string | null) => {
-    console.log(`Agent process exited with code ${code} signal ${signal}`);
-    cleanupProcess(sessionId, code === 0);
-  });
-
-  // Handle errors
-  proc.on('error', (error: Error) => {
-    console.error(`Agent process error:`, error);
-    handleAgentLog(sessionId, workspaceId, 'error', `Process error: ${error.message}`);
-    cleanupProcess(sessionId, false);
+  ptyProcess.onData((data: string) => handleOutput(monitored, data));
+  ptyProcess.onExit(({ exitCode, signal }) => {
+    console.log(`Agent process exited with code ${exitCode} signal ${signal}`);
+    cleanupProcess(sessionId, exitCode === 0);
   });
 
   return true;
 }
 
-/**
- * Handle output from agent with buffer limits
- */
-function handleOutput(monitored: MonitoredProcess, level: 'info' | 'error', data: Buffer): void {
-  const streamName = level === 'info' ? 'stdout' : 'stderr';
-  const currentSize = monitored.outputBuffer[streamName].length;
+function handleOutput(monitored: MonitoredProcess, data: string): void {
+  // Stream raw PTY data directly to terminal (with ANSI codes preserved)
+  broadcastToWorkspace(monitored.workspaceId, {
+    type: 'terminal_data',
+    data: {
+      sessionId: monitored.sessionId,
+      workspaceId: monitored.workspaceId,
+      data: data,
+    },
+  });
 
-  // Check buffer size limit
-  if (currentSize >= MAX_OUTPUT_BUFFER_SIZE) {
-    // Buffer full, drop data but log a warning
-    if (currentSize === MAX_OUTPUT_BUFFER_SIZE) {
-      handleAgentLog(
-        monitored.sessionId,
-        monitored.workspaceId,
-        'warning',
-        `[Output buffer full, some output will be dropped]`
-      );
-      monitored.outputBuffer[streamName] += '_OVERFLOW_';
+  // Also maintain the log buffer for the logs view (sanitized)
+  if (monitored.outputSize >= MAX_OUTPUT_BUFFER_SIZE) {
+    if (monitored.outputSize === MAX_OUTPUT_BUFFER_SIZE) {
+      handleAgentLog(monitored.sessionId, monitored.workspaceId, 'warning', '[Output buffer full]');
+      monitored.outputSize += 1;
     }
     return;
   }
-
-  // Add data to buffer
-  const chunk = data.toString();
-  monitored.outputBuffer[streamName] += chunk;
-
-  // Process complete lines
-  const lines = monitored.outputBuffer[streamName].split('\n');
-
-  // Keep the last incomplete line in the buffer
-  monitored.outputBuffer[streamName] = lines.pop() || '';
-
-  // Process complete lines
+  monitored.outputSize += data.length;
+  monitored.outputBuffer += data;
+  const lines = monitored.outputBuffer.split('\n');
+  monitored.outputBuffer = lines.pop() || '';
   for (const line of lines) {
-    if (line.trim()) {
-      handleAgentLog(monitored.sessionId, monitored.workspaceId, level, line);
-    }
+    if (line.trim()) handleAgentLog(monitored.sessionId, monitored.workspaceId, 'info', line);
   }
 }
 
-/**
- * Cleanup process resources
- */
 function cleanupProcess(sessionId: string, success: boolean): void {
   const monitored = activeProcesses.get(sessionId);
   if (!monitored) return;
-
-  // Clear any pending shutdown timeout
-  if (monitored.shutdownTimeout) {
-    clearTimeout(monitored.shutdownTimeout);
+  if (monitored.shutdownTimeout) clearTimeout(monitored.shutdownTimeout);
+  if (monitored.outputBuffer.trim()) {
+    handleAgentLog(monitored.sessionId, monitored.workspaceId, 'info', monitored.outputBuffer);
   }
-
-  // Flush any remaining output
-  if (monitored.outputBuffer.stdout.trim()) {
-    handleAgentLog(monitored.sessionId, monitored.workspaceId, 'info', monitored.outputBuffer.stdout);
-  }
-  if (monitored.outputBuffer.stderr.trim()) {
-    handleAgentLog(monitored.sessionId, monitored.workspaceId, 'error', monitored.outputBuffer.stderr);
-  }
-
   const status = success ? 'completed' : 'failed';
-
-  // Update session
-  sessionQueries.update(sessionId, {
-    status,
-    completedAt: Date.now(),
-  });
-
-  // Update workspace
-  workspaceQueries.update(monitored.workspaceId, {
-    status: success ? 'completed' : 'error',
-  });
-
-  // Broadcast completion event
+  sessionQueries.update(sessionId, { status, completedAt: Date.now() });
+  workspaceQueries.update(monitored.workspaceId, { status: success ? 'completed' : 'error' });
   broadcastToWorkspace(monitored.workspaceId, {
     type: 'session_completed',
-    data: {
-      sessionId,
-      workspaceId: monitored.workspaceId,
-      success,
-      timestamp: Date.now(),
-    },
+    data: { sessionId, workspaceId: monitored.workspaceId, success, timestamp: Date.now() },
   });
-
-  // Remove from active processes
   activeProcesses.delete(sessionId);
 }
 
-/**
- * Stop an agent process
- */
+
 export function stopAgent(sessionId: string): boolean {
   const monitored = activeProcesses.get(sessionId);
-
   if (!monitored) {
-    console.warn(`No active process found for session ${sessionId}`);
+    console.warn(`No active process for session ${sessionId}`);
     return false;
   }
-
   console.log(`Stopping agent process for session ${sessionId}`);
-
-  // Try graceful shutdown first
-  monitored.process.kill('SIGTERM');
-
-  // Set up force kill timeout
+  monitored.ptyProcess.kill();
   monitored.shutdownTimeout = setTimeout(() => {
     if (activeProcesses.has(sessionId)) {
-      console.log(`Force killing agent process for session ${sessionId}`);
-      monitored.process.kill('SIGKILL');
+      console.log(`Force killing agent for session ${sessionId}`);
+      try { process.kill(monitored.ptyProcess.pid, 'SIGKILL'); } catch {}
     }
   }, GRACEFUL_SHUTDOWN_TIMEOUT);
-
   return true;
 }
 
-/**
- * Stop all agent processes (for graceful shutdown)
- */
 export function stopAllAgents(): void {
   console.log(`Stopping all ${activeProcesses.size} agent processes...`);
-
   for (const [sessionId, monitored] of activeProcesses.entries()) {
     console.log(`Stopping agent for session ${sessionId}`);
-    monitored.process.kill('SIGTERM');
+    monitored.ptyProcess.kill();
   }
-
-  // Give processes time to exit gracefully
   setTimeout(() => {
-    for (const [sessionId, monitored] of activeProcesses.entries()) {
-      if (monitored.process.exitCode === null) {
-        console.log(`Force killing agent for session ${sessionId}`);
-        monitored.process.kill('SIGKILL');
-      }
+    for (const [, monitored] of activeProcesses.entries()) {
+      try { process.kill(monitored.ptyProcess.pid, 'SIGKILL'); } catch {}
     }
   }, GRACEFUL_SHUTDOWN_TIMEOUT);
 }
 
-/**
- * Handle agent log entry
- */
 function handleAgentLog(
   sessionId: string,
   workspaceId: string,
   level: 'info' | 'warning' | 'error',
   message: string
 ): void {
-  // Sanitize and limit message length
   const sanitized = sanitizeForDisplay(message, MAX_LOG_MESSAGE_LENGTH);
-
-  // Store in database
-  agentLogQueries.create({
-    sessionId,
-    timestamp: Date.now(),
-    level,
-    message: sanitized,
-  });
-
-  // Broadcast to WebSocket clients
+  agentLogQueries.create({ sessionId, timestamp: Date.now(), level, message: sanitized });
   broadcastToWorkspace(workspaceId, {
     type: 'agent_log',
-    data: {
-      sessionId,
-      workspaceId,
-      level,
-      message: sanitized,
-      timestamp: Date.now(),
-    },
+    data: { sessionId, workspaceId, level, message: sanitized, timestamp: Date.now() },
   });
 }
 
-/**
- * Send input to agent process with error handling
- */
 export function sendToAgent(sessionId: string, input: string): boolean {
   const monitored = activeProcesses.get(sessionId);
-
   if (!monitored) {
-    console.warn(`No active process found for session ${sessionId}`);
+    console.warn(`No active process for session ${sessionId}`);
     return false;
   }
-
-  if (!monitored.process.stdin || monitored.process.stdin.destroyed) {
-    console.warn(`stdin not available for session ${sessionId}`);
-    return false;
-  }
-
   try {
-    const written = monitored.process.stdin.write(input + '\n');
-    if (!written) {
-      // Handle backpressure
-      monitored.process.stdin.once('drain', () => {
-        console.log(`stdin drained for session ${sessionId}`);
-      });
-    }
+    monitored.ptyProcess.write(input);
     return true;
   } catch (error) {
-    console.error(`Error writing to stdin for session ${sessionId}:`, error);
+    console.error(`Error writing to PTY:`, error);
     return false;
   }
 }
 
-/**
- * Get all active sessions
- */
+export function resizeTerminal(sessionId: string, cols: number, rows: number): boolean {
+  const monitored = activeProcesses.get(sessionId);
+  if (!monitored) return false;
+  try {
+    monitored.ptyProcess.resize(cols, rows);
+    return true;
+  } catch { return false; }
+}
+
 export function getActiveSessions(): string[] {
   return Array.from(activeProcesses.keys());
 }
 
-/**
- * Check if a session is active
- */
 export function isSessionActive(sessionId: string): boolean {
   return activeProcesses.has(sessionId);
 }
