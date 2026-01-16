@@ -119,14 +119,10 @@ export function DirectoryBrowser({
 
   const breadcrumbs = getBreadcrumbs();
 
-  // Filter entries based on search query and filterGitOnly
+  // Filter entries based on search query
+  // Note: filterGitOnly only affects selection, not visibility (for navigation)
   const filteredEntries = useMemo(() => {
     let filtered = entries;
-
-    // Filter to git repos only if requested
-    if (filterGitOnly) {
-      filtered = filtered.filter(entry => entry.isGitRepository);
-    }
 
     // Filter by search query
     if (searchQuery.trim()) {
@@ -135,7 +131,7 @@ export function DirectoryBrowser({
     }
 
     return filtered;
-  }, [entries, searchQuery, filterGitOnly]);
+  }, [entries, searchQuery]);
 
   return (
     <div
@@ -349,9 +345,9 @@ export function DirectoryBrowser({
             </button>
             <button
               onClick={() => selectedEntry && onSelect(selectedEntry.path, selectedEntry.name)}
-              disabled={!selectedEntry}
+              disabled={!selectedEntry || (filterGitOnly && !selectedEntry.isGitRepository)}
               className={`px-4 py-2 rounded-md transition-colors ${
-                selectedEntry
+                selectedEntry && (!filterGitOnly || selectedEntry.isGitRepository)
                   ? 'bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer'
                   : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
               }`}

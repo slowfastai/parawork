@@ -4,11 +4,12 @@
 import { Router } from 'express';
 import { readdir, stat } from 'fs/promises';
 import { join, basename } from 'path';
-import type { ApiResponse, BrowseResponse, FileListResponse, FileEntry } from '@parawork/shared';
+import type { ApiResponse, BrowseResponse, FileListResponse, FileEntry, SearchReposResponse, DirectoryEntry } from '@parawork/shared';
 import { BrowseRequestSchema } from '@parawork/shared';
 import { validateBrowsePath } from '../../utils/validation.js';
-import { listDirectories, getParentPath } from '../../utils/filesystem.js';
+import { listDirectories, getParentPath, getGitInfo } from '../../utils/filesystem.js';
 import { homedir } from 'os';
+import { existsSync } from 'fs';
 
 const router = Router();
 
@@ -152,8 +153,8 @@ router.get('/list', async (req, res) => {
     });
 
     // Get stats for each entry in parallel
-    const entries: FileEntry[] = (await Promise.all(
-      filteredEntries.slice(0, 500).map(async (entry) => {
+    const entryResults = await Promise.all(
+      filteredEntries.slice(0, 500).map(async (entry): Promise<FileEntry | null> => {
         const fullPath = join(normalizedPath, entry.name);
         try {
           const stats = await stat(fullPath);
@@ -169,7 +170,8 @@ router.get('/list', async (req, res) => {
           return null;
         }
       })
-    )).filter((entry): entry is FileEntry => entry !== null);
+    );
+    const entries = entryResults.filter((entry): entry is FileEntry => entry !== null);
 
     const response: ApiResponse<FileListResponse> = {
       success: true,
@@ -205,6 +207,135 @@ router.get('/list', async (req, res) => {
     const response: ApiResponse = {
       success: false,
       error: 'Failed to list files',
+    };
+    res.status(500).json(response);
+  }
+});
+
+/**
+ * GET /api/fs/search-repos
+ * Search for git repositories by name
+ * Query params: q (search query, required)
+ */
+router.get('/search-repos', async (req, res) => {
+  try {
+    const query = (req.query.q as string || '').toLowerCase().trim();
+
+    if (!query || query.length < 2) {
+      const response: ApiResponse<SearchReposResponse> = {
+        success: true,
+        data: {
+          query,
+          results: [],
+        },
+      };
+      return res.json(response);
+    }
+
+    // Common directories to search for git repos
+    const home = homedir();
+    const searchPaths = [
+      home,
+      join(home, 'Documents'),
+      join(home, 'Projects'),
+      join(home, 'Developer'),
+      join(home, 'Code'),
+      join(home, 'dev'),
+      join(home, 'repos'),
+      join(home, 'workspace'),
+      join(home, 'work'),
+      join(home, 'src'),
+      join(home, 'Downloads'),
+    ].filter(p => existsSync(p));
+
+    const results: DirectoryEntry[] = [];
+    const seen = new Set<string>();
+    const maxResults = 20;
+    const maxDepth = 3;
+
+    // Recursive search function
+    async function searchDir(dirPath: string, depth: number): Promise<void> {
+      if (depth > maxDepth || results.length >= maxResults) return;
+
+      try {
+        const entries = await readdir(dirPath, { withFileTypes: true });
+        const directories = entries.filter(e => e.isDirectory() && !e.name.startsWith('.'));
+
+        for (const dir of directories) {
+          if (results.length >= maxResults) break;
+
+          const fullPath = join(dirPath, dir.name);
+
+          // Skip if already seen
+          if (seen.has(fullPath)) continue;
+          seen.add(fullPath);
+
+          // Check if name matches query
+          const nameMatches = dir.name.toLowerCase().includes(query);
+
+          // Check if it's a git repo
+          const gitInfo = await getGitInfo(fullPath);
+          const isGitRepo = gitInfo !== null;
+
+          if (nameMatches && isGitRepo) {
+            try {
+              const stats = await stat(fullPath);
+              results.push({
+                name: dir.name,
+                path: fullPath,
+                isDirectory: true,
+                isGitRepository: true,
+                gitInfo: gitInfo || undefined,
+                lastModified: stats.mtimeMs,
+              });
+            } catch {
+              // Skip if can't stat
+            }
+          }
+
+          // Continue searching deeper (but not into git repos' subdirectories)
+          if (!isGitRepo && depth < maxDepth) {
+            await searchDir(fullPath, depth + 1);
+          }
+        }
+      } catch {
+        // Skip directories we can't read
+      }
+    }
+
+    // Search all paths in parallel
+    await Promise.all(searchPaths.map(p => searchDir(p, 0)));
+
+    // Sort by name relevance (exact match first, then starts with, then contains)
+    results.sort((a, b) => {
+      const aName = a.name.toLowerCase();
+      const bName = b.name.toLowerCase();
+      const aExact = aName === query;
+      const bExact = bName === query;
+      const aStarts = aName.startsWith(query);
+      const bStarts = bName.startsWith(query);
+
+      if (aExact && !bExact) return -1;
+      if (!aExact && bExact) return 1;
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+      return aName.localeCompare(bName);
+    });
+
+    const response: ApiResponse<SearchReposResponse> = {
+      success: true,
+      data: {
+        query,
+        results: results.slice(0, maxResults),
+      },
+    };
+
+    res.json(response);
+  } catch (error) {
+    console.error('Error searching repos:', error);
+    const response: ApiResponse = {
+      success: false,
+      error: 'Failed to search repositories',
     };
     res.status(500).json(response);
   }
