@@ -146,6 +146,14 @@ export interface FileListResponse {
 }
 
 /**
+ * SearchReposResponse represents the response from git repository search
+ */
+export interface SearchReposResponse {
+  query: string;
+  results: DirectoryEntry[];
+}
+
+/**
  * WebSocket event types
  */
 export type WebSocketEventType =

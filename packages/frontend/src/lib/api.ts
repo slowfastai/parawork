@@ -17,6 +17,7 @@ import type {
   ApiResponse,
   BrowseResponse,
   FileListResponse,
+  SearchReposResponse,
 } from '@parawork/shared';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
@@ -219,6 +220,11 @@ export const api = {
     list: (path: string) =>
       fetchApi<FileListResponse>(
         `/fs/list?path=${encodeURIComponent(path)}`
+      ),
+
+    searchRepos: (query: string) =>
+      fetchApi<SearchReposResponse>(
+        `/fs/search-repos?q=${encodeURIComponent(query)}`
       ),
   },
 };
