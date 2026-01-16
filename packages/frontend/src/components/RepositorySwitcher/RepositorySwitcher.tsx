@@ -29,7 +29,7 @@ interface ContextMenuState {
 }
 
 interface RepositorySwitcherProps {
-  onNewWorkspace: () => void;
+  onNewWorkspace: (repository?: Repository) => void;
 }
 
 export function RepositorySwitcher({ onNewWorkspace }: RepositorySwitcherProps) {
@@ -195,7 +195,7 @@ export function RepositorySwitcher({ onNewWorkspace }: RepositorySwitcherProps) 
                 onToggle={() => toggleExpand(repo.id)}
                 focusedWorkspaceId={focusedWorkspaceId}
                 onSelectWorkspace={setFocusedWorkspace}
-                onNewWorkspace={onNewWorkspace}
+                onAddWorkspace={(repository) => onNewWorkspace(repository)}
                 onWorkspaceContextMenu={handleWorkspaceContextMenu}
                 onRepoContextMenu={handleRepoContextMenu}
                 sessions={sessions}
@@ -256,7 +256,7 @@ interface RepositoryItemProps {
   onToggle: () => void;
   focusedWorkspaceId: string | null;
   onSelectWorkspace: (id: string) => void;
-  onNewWorkspace: () => void;
+  onAddWorkspace: (repository: Repository) => void;
   onWorkspaceContextMenu: (e: React.MouseEvent, workspace: Workspace) => void;
   onRepoContextMenu: (e: React.MouseEvent, repository: Repository) => void;
   sessions: Record<string, any>;
@@ -269,17 +269,18 @@ function RepositoryItem({
   onToggle,
   focusedWorkspaceId,
   onSelectWorkspace,
+  onAddWorkspace,
   onWorkspaceContextMenu,
   onRepoContextMenu,
 }: RepositoryItemProps) {
   const runningInRepo = workspaces.filter((ws) => ws.status === 'running').length;
 
   return (
-    <div>
-      <button
+    <div className="group">
+      <div
         onClick={onToggle}
         onContextMenu={(e) => onRepoContextMenu(e, repository)}
-        className="w-full p-2 rounded-md text-left transition-colors hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+        className="w-full p-2 rounded-md text-left transition-colors hover:bg-accent hover:text-accent-foreground flex items-center gap-2 cursor-pointer"
       >
         {isExpanded ? (
           <ChevronDown className="w-4 h-4 flex-shrink-0" />
@@ -293,7 +294,17 @@ function RepositoryItem({
             {runningInRepo}
           </span>
         )}
-      </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onAddWorkspace(repository);
+          }}
+          className="p-1 hover:bg-accent-foreground/10 rounded transition-colors opacity-0 group-hover:opacity-100"
+          title="Add workspace"
+        >
+          <Plus className="w-3.5 h-3.5" />
+        </button>
+      </div>
 
       {/* Workspaces in this repo */}
       {isExpanded && (

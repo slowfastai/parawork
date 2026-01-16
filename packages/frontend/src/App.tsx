@@ -7,9 +7,11 @@ import { NewWorkspaceDialog } from './components/NewWorkspaceDialog';
 import { useWebSocket } from './contexts/WebSocketContext';
 import { useAppStore } from './stores/appStore';
 import { api } from './lib/api';
+import type { Repository } from '@parawork/shared';
 
 export function App() {
   const [showNewWorkspace, setShowNewWorkspace] = useState(false);
+  const [newWorkspaceRepo, setNewWorkspaceRepo] = useState<Repository | null>(null);
   const [loading, setLoading] = useState(true);
 
   const setRepositories = useAppStore((state) => state.setRepositories);
@@ -154,12 +156,25 @@ export function App() {
     );
   }
 
+  const handleNewWorkspace = (repository?: Repository) => {
+    setNewWorkspaceRepo(repository || null);
+    setShowNewWorkspace(true);
+  };
+
+  const handleCloseNewWorkspace = () => {
+    setShowNewWorkspace(false);
+    setNewWorkspaceRepo(null);
+  };
+
   return (
     <>
-      <PanelLayout onNewWorkspace={() => setShowNewWorkspace(true)} />
+      <PanelLayout onNewWorkspace={handleNewWorkspace} />
 
       {showNewWorkspace && (
-        <NewWorkspaceDialog onClose={() => setShowNewWorkspace(false)} />
+        <NewWorkspaceDialog
+          onClose={handleCloseNewWorkspace}
+          repository={newWorkspaceRepo || undefined}
+        />
       )}
     </>
   );

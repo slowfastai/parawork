@@ -10,9 +10,10 @@ import { useState, useRef, useCallback } from 'react';
 import { RepositorySwitcher } from '../RepositorySwitcher/RepositorySwitcher';
 import { AgentTerminalPanel } from '../AgentTerminalPanel';
 import { RightPanel } from '../RightPanel';
+import type { Repository } from '@parawork/shared';
 
 interface PanelLayoutProps {
-  onNewWorkspace: () => void;
+  onNewWorkspace: (repository?: Repository) => void;
 }
 
 export function PanelLayout({ onNewWorkspace }: PanelLayoutProps) {

@@ -5,16 +5,17 @@ import { useState } from 'react';
 import { X } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAppStore } from '../stores/appStore';
-import type { AgentType } from '@parawork/shared';
+import type { AgentType, Repository } from '@parawork/shared';
 import { DirectoryBrowser } from './DirectoryBrowser';
 
 interface NewWorkspaceDialogProps {
   onClose: () => void;
+  repository?: Repository;
 }
 
-export function NewWorkspaceDialog({ onClose }: NewWorkspaceDialogProps) {
+export function NewWorkspaceDialog({ onClose, repository }: NewWorkspaceDialogProps) {
   const [name, setName] = useState('');
-  const [path, setPath] = useState('');
+  const [path, setPath] = useState(repository?.path || '');
   const [agentType, setAgentType] = useState<AgentType>('claude-code');
   const [creating, setCreating] = useState(false);
   const [showBrowser, setShowBrowser] = useState(false);
@@ -35,6 +36,7 @@ export function NewWorkspaceDialog({ onClose }: NewWorkspaceDialogProps) {
         name: name.trim(),
         path: path.trim(),
         agentType,
+        repositoryId: repository?.id,
       });
 
       addWorkspace(workspace);
@@ -71,7 +73,9 @@ export function NewWorkspaceDialog({ onClose }: NewWorkspaceDialogProps) {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-background border border-border rounded-lg w-full max-w-md p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">New Workspace</h2>
+          <h2 className="text-xl font-semibold">
+            {repository ? `New Workspace in ${repository.name}` : 'New Workspace'}
+          </h2>
           <button
             onClick={onClose}
             className="p-1 hover:bg-accent rounded transition-colors"
@@ -95,31 +99,45 @@ export function NewWorkspaceDialog({ onClose }: NewWorkspaceDialogProps) {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Project Path
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={path}
-                onChange={(e) => setPath(e.target.value)}
-                placeholder="/path/to/project"
-                className="flex-1 px-3 py-2 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowBrowser(true)}
-                className="px-4 py-2 border border-border rounded-md hover:bg-accent transition-colors whitespace-nowrap"
-              >
-                Browse...
-              </button>
+          {repository ? (
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Repository Path
+              </label>
+              <div className="px-3 py-2 border border-border rounded-md bg-muted/50 text-muted-foreground text-sm truncate">
+                {repository.path}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                A git worktree will be created for this workspace
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Select a git repository to auto-create a worktree, or any directory for a regular workspace
-            </p>
-          </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Project Path
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={path}
+                  onChange={(e) => setPath(e.target.value)}
+                  placeholder="/path/to/project"
+                  className="flex-1 px-3 py-2 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowBrowser(true)}
+                  className="px-4 py-2 border border-border rounded-md hover:bg-accent transition-colors whitespace-nowrap"
+                >
+                  Browse...
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Select a git repository to auto-create a worktree, or any directory for a regular workspace
+              </p>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium mb-1">
@@ -154,8 +172,8 @@ export function NewWorkspaceDialog({ onClose }: NewWorkspaceDialogProps) {
         </form>
       </div>
 
-      {/* Directory Browser */}
-      {showBrowser && (
+      {/* Directory Browser - only show when no repository is pre-selected */}
+      {showBrowser && !repository && (
         <DirectoryBrowser
           onSelect={(selectedPath, folderName) => {
             setPath(selectedPath);
