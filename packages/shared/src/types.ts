@@ -10,10 +10,24 @@ export type AgentType = 'claude-code' | 'codex';
 export type LogLevel = 'info' | 'warning' | 'error';
 
 /**
+ * Repository represents a git repository that can contain multiple workspaces
+ */
+export interface Repository {
+  id: string;
+  name: string;
+  path: string;
+  defaultBranch: string;
+  remoteUrl: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
  * Workspace represents a focus unit (like a browser tab)
  */
 export interface Workspace {
   id: string;
+  repositoryId: string | null;
   name: string;
   path: string;
   status: WorkspaceStatus;
@@ -110,6 +124,25 @@ export interface BrowseResponse {
   currentPath: string;
   parentPath: string | null;
   entries: DirectoryEntry[];
+}
+
+/**
+ * FileEntry represents a file or directory in the file explorer
+ */
+export interface FileEntry {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+  size?: number;
+  lastModified: number;
+}
+
+/**
+ * FileListResponse represents the response from file listing
+ */
+export interface FileListResponse {
+  currentPath: string;
+  entries: FileEntry[];
 }
 
 /**
@@ -250,10 +283,22 @@ export type WebSocketEvent = ServerToClientEvent | ClientToServerEvent;
 /**
  * API Request/Response types
  */
+export interface CreateRepositoryRequest {
+  name: string;
+  path: string;
+}
+
+export interface UpdateRepositoryRequest {
+  name?: string;
+  defaultBranch?: string;
+  remoteUrl?: string | null;
+}
+
 export interface CreateWorkspaceRequest {
   name: string;
   path: string;
   agentType?: AgentType;
+  repositoryId?: string;
 }
 
 export interface UpdateWorkspaceRequest {

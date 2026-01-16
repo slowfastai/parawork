@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Full-height container hierarchy for panel layout */
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -40,4 +49,12 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Resizable panels styling (custom flexbox implementation) */
+
+/* Separator appearance */
+[data-separator] {
+  touch-action: none;
+  user-select: none;
 }

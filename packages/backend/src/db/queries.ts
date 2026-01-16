@@ -8,6 +8,7 @@ import type {
   Message,
   FileChange,
   AgentLog,
+  Repository,
   WorkspaceStatus,
   SessionStatus,
   AgentType,
@@ -19,8 +20,19 @@ import type {
 /**
  * Database row interfaces (snake_case as stored in SQLite)
  */
+interface RepositoryRow {
+  id: string;
+  name: string;
+  path: string;
+  default_branch: string;
+  remote_url: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
 interface WorkspaceRow {
   id: string;
+  repository_id: string | null;
   name: string;
   path: string;
   status: string;
@@ -72,11 +84,27 @@ interface AgentLogRow {
 }
 
 /**
+ * Convert database row to Repository model
+ */
+function rowToRepository(row: RepositoryRow): Repository {
+  return {
+    id: row.id,
+    name: row.name,
+    path: row.path,
+    defaultBranch: row.default_branch,
+    remoteUrl: row.remote_url,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+/**
  * Convert database row to Workspace model
  */
 function rowToWorkspace(row: WorkspaceRow): Workspace {
   const workspace: Workspace = {
     id: row.id,
+    repositoryId: row.repository_id,
     name: row.name,
     path: row.path,
     status: row.status as WorkspaceStatus,
@@ -166,6 +194,120 @@ const WORKSPACE_UPDATE_FIELDS = ['name', 'status', 'agent_type', 'last_focused_a
 const SESSION_UPDATE_FIELDS = ['status', 'process_id', 'started_at', 'completed_at'] as const;
 
 /**
+ * Repository queries
+ */
+export const repositoryQueries = {
+  /**
+   * Create a new repository
+   */
+  create(repository: Repository): Repository {
+    const db = getDatabase();
+    const stmt = db.prepare(`
+      INSERT INTO repositories (id, name, path, default_branch, remote_url, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      repository.id,
+      repository.name,
+      repository.path,
+      repository.defaultBranch,
+      repository.remoteUrl,
+      repository.createdAt,
+      repository.updatedAt
+    );
+
+    return repository;
+  },
+
+  /**
+   * Get all repositories
+   */
+  getAll(): Repository[] {
+    const db = getDatabase();
+    const stmt = db.prepare('SELECT * FROM repositories ORDER BY name ASC');
+    const rows = stmt.all() as RepositoryRow[];
+    return rows.map(rowToRepository);
+  },
+
+  /**
+   * Get repository by ID
+   */
+  getById(id: string): Repository | null {
+    const db = getDatabase();
+    const stmt = db.prepare('SELECT * FROM repositories WHERE id = ?');
+    const row = stmt.get(id) as RepositoryRow | undefined;
+    return row ? rowToRepository(row) : null;
+  },
+
+  /**
+   * Get repository by path
+   */
+  getByPath(path: string): Repository | null {
+    const db = getDatabase();
+    const stmt = db.prepare('SELECT * FROM repositories WHERE path = ?');
+    const row = stmt.get(path) as RepositoryRow | undefined;
+    return row ? rowToRepository(row) : null;
+  },
+
+  /**
+   * Update repository
+   */
+  update(id: string, updates: Partial<Repository>): Repository | null {
+    const db = getDatabase();
+    const setClauses: string[] = [];
+    const values: (string | number | null)[] = [];
+
+    if (updates.name !== undefined) {
+      setClauses.push('name = ?');
+      values.push(updates.name);
+    }
+    if (updates.defaultBranch !== undefined) {
+      setClauses.push('default_branch = ?');
+      values.push(updates.defaultBranch);
+    }
+    if (updates.remoteUrl !== undefined) {
+      setClauses.push('remote_url = ?');
+      values.push(updates.remoteUrl);
+    }
+
+    if (setClauses.length === 0) {
+      return this.getById(id);
+    }
+
+    setClauses.push('updated_at = ?');
+    values.push(Date.now());
+    values.push(id);
+
+    const sql = `UPDATE repositories SET ${setClauses.join(', ')} WHERE id = ?`;
+    const stmt = db.prepare(sql);
+    stmt.run(...values);
+
+    return this.getById(id);
+  },
+
+  /**
+   * Delete repository
+   */
+  delete(id: string): boolean {
+    const db = getDatabase();
+    const stmt = db.prepare('DELETE FROM repositories WHERE id = ?');
+    const result = stmt.run(id);
+    return result.changes > 0;
+  },
+
+  /**
+   * Get workspaces belonging to a repository
+   */
+  getWorkspaces(repositoryId: string): Workspace[] {
+    const db = getDatabase();
+    const stmt = db.prepare('SELECT * FROM workspaces WHERE repository_id = ? ORDER BY last_focused_at DESC NULLS LAST, created_at DESC');
+    const rows = stmt.all(repositoryId) as WorkspaceRow[];
+    return rows.map(rowToWorkspace);
+  },
+};
+
+/**
  * Workspace queries
  */
 export const workspaceQueries = {
@@ -176,14 +318,15 @@ export const workspaceQueries = {
     const db = getDatabase();
     const stmt = db.prepare(`
       INSERT INTO workspaces (
-        id, name, path, status, agent_type, created_at, updated_at, last_focused_at,
+        id, repository_id, name, path, status, agent_type, created_at, updated_at, last_focused_at,
         git_worktree_path, git_branch_name, git_base_repo_path, git_base_branch, git_created_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
       workspace.id,
+      workspace.repositoryId,
       workspace.name,
       workspace.path,
       workspace.status,

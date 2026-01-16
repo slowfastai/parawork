@@ -50,7 +50,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json(response);
     }
 
-    const { name, path, agentType } = validation.data;
+    const { name, path, agentType, repositoryId } = validation.data;
 
     // Validate workspace path (security check)
     const pathValidation = validateWorkspacePath(path);
@@ -88,6 +88,7 @@ router.post('/', async (req, res) => {
 
     const workspace: Workspace = {
       id: uuidv4(),
+      repositoryId: repositoryId || null,
       name,
       path: workspacePath,
       status: 'idle',

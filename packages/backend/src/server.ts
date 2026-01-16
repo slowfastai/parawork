@@ -6,6 +6,7 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { initWebSocketServer, closeWebSocketServer } from './api/websocket.js';
 import workspacesRouter from './api/routes/workspaces.js';
+import repositoriesRouter from './api/routes/repositories.js';
 import sessionsRouter from './api/routes/sessions.js';
 import systemRouter from './api/routes/system.js';
 import filesystemRouter from './api/routes/filesystem.js';
@@ -49,6 +50,7 @@ export function createApp() {
   });
 
   // API routes
+  app.use('/api/repositories', repositoriesRouter);
   app.use('/api/workspaces', workspacesRouter);
   app.use('/api', sessionsRouter);
   app.use('/api', systemRouter);
