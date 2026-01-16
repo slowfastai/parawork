@@ -72,9 +72,10 @@ router.get('/browse', async (req, res) => {
       console.error('Error message:', error.message);
     }
 
-    // Check for specific error types
-    if (error instanceof Error) {
-      if (error.message.includes('EACCES') || error.message.includes('EPERM')) {
+    // Check for specific error types using error code (more reliable than message)
+    if (error instanceof Error && 'code' in error) {
+      const errorCode = (error as NodeJS.ErrnoException).code;
+      if (errorCode === 'EACCES' || errorCode === 'EPERM') {
         const response: ApiResponse = {
           success: false,
           error: 'Permission denied',
@@ -82,7 +83,7 @@ router.get('/browse', async (req, res) => {
         return res.status(403).json(response);
       }
 
-      if (error.message.includes('ENOENT')) {
+      if (errorCode === 'ENOENT') {
         const response: ApiResponse = {
           success: false,
           error: 'Directory not found',
@@ -150,24 +151,25 @@ router.get('/list', async (req, res) => {
       return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
     });
 
-    // Get stats for each entry
-    const entries: FileEntry[] = [];
-
-    for (const entry of filteredEntries.slice(0, 500)) {
-      const fullPath = join(normalizedPath, entry.name);
-      try {
-        const stats = await stat(fullPath);
-        entries.push({
-          name: entry.name,
-          path: fullPath,
-          isDirectory: entry.isDirectory(),
-          size: entry.isFile() ? stats.size : undefined,
-          lastModified: stats.mtimeMs,
-        });
-      } catch {
-        // Skip entries we can't stat
-      }
-    }
+    // Get stats for each entry in parallel
+    const entries: FileEntry[] = (await Promise.all(
+      filteredEntries.slice(0, 500).map(async (entry) => {
+        const fullPath = join(normalizedPath, entry.name);
+        try {
+          const stats = await stat(fullPath);
+          return {
+            name: entry.name,
+            path: fullPath,
+            isDirectory: entry.isDirectory(),
+            size: entry.isFile() ? stats.size : undefined,
+            lastModified: stats.mtimeMs,
+          };
+        } catch {
+          // Skip entries we can't stat
+          return null;
+        }
+      })
+    )).filter((entry): entry is FileEntry => entry !== null);
 
     const response: ApiResponse<FileListResponse> = {
       success: true,
@@ -181,8 +183,9 @@ router.get('/list', async (req, res) => {
   } catch (error) {
     console.error('Error listing files:', error);
 
-    if (error instanceof Error) {
-      if (error.message.includes('EACCES') || error.message.includes('EPERM')) {
+    if (error instanceof Error && 'code' in error) {
+      const errorCode = (error as NodeJS.ErrnoException).code;
+      if (errorCode === 'EACCES' || errorCode === 'EPERM') {
         const response: ApiResponse = {
           success: false,
           error: 'Permission denied',
@@ -190,7 +193,7 @@ router.get('/list', async (req, res) => {
         return res.status(403).json(response);
       }
 
-      if (error.message.includes('ENOENT')) {
+      if (errorCode === 'ENOENT') {
         const response: ApiResponse = {
           success: false,
           error: 'Directory not found',

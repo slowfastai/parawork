@@ -51,10 +51,9 @@ html, body, #root {
   }
 }
 
-/* Resizable panels styling for react-resizable-panels */
-/* Note: The library handles display, flex-direction, flex-wrap, overflow automatically via inline styles */
+/* Resizable panels styling (custom flexbox implementation) */
 
-/* Separator appearance - library handles resize behavior */
+/* Separator appearance */
 [data-separator] {
   touch-action: none;
   user-select: none;
