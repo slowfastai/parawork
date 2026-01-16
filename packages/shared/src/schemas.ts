@@ -10,10 +10,32 @@ export const ChangeTypeSchema = z.enum(['created', 'modified', 'deleted']);
 export const AgentTypeSchema = z.enum(['claude-code', 'codex']);
 export const LogLevelSchema = z.enum(['info', 'warning', 'error']);
 
+export const RepositorySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  path: z.string(),
+  defaultBranch: z.string(),
+  remoteUrl: z.string().nullable(),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+});
+
+export const CreateRepositoryRequestSchema = z.object({
+  name: z.string().min(1).max(255),
+  path: z.string().min(1),
+});
+
+export const UpdateRepositoryRequestSchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  defaultBranch: z.string().optional(),
+  remoteUrl: z.string().nullable().optional(),
+});
+
 export const CreateWorkspaceRequestSchema = z.object({
   name: z.string().min(1).max(255),
   path: z.string().min(1),
   agentType: AgentTypeSchema.optional(),
+  repositoryId: z.string().optional(),
 });
 
 export const UpdateWorkspaceRequestSchema = z.object({
@@ -33,6 +55,7 @@ export const SendMessageRequestSchema = z.object({
 
 export const WorkspaceSchema = z.object({
   id: z.string(),
+  repositoryId: z.string().nullable(),
   name: z.string(),
   path: z.string(),
   status: WorkspaceStatusSchema,

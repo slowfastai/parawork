@@ -39,6 +39,7 @@ vi.mock('../../contexts/WebSocketContext', () => ({
 // Helper to create a mock workspace
 const createMockWorkspace = (overrides: Partial<Workspace> = {}): Workspace => ({
   id: 'workspace-1',
+  repositoryId: null,
   name: 'Test Workspace',
   path: '/test/path',
   status: 'running',
@@ -65,6 +66,7 @@ describe('WorkspaceView session loading', () => {
   beforeEach(() => {
     // Reset the store before each test
     useAppStore.setState({
+      repositories: [],
       workspaces: [],
       focusedWorkspaceId: null,
       sessions: {},

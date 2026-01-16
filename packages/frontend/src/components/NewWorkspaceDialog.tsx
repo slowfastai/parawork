@@ -157,8 +157,12 @@ export function NewWorkspaceDialog({ onClose }: NewWorkspaceDialogProps) {
       {/* Directory Browser */}
       {showBrowser && (
         <DirectoryBrowser
-          onSelect={(selectedPath) => {
+          onSelect={(selectedPath, folderName) => {
             setPath(selectedPath);
+            // Auto-fill name if empty
+            if (!name.trim()) {
+              setName(folderName);
+            }
             setShowBrowser(false);
           }}
           onClose={() => setShowBrowser(false)}

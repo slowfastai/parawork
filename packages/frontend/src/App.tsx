@@ -2,8 +2,7 @@
  * Main App Component
  */
 import { useEffect, useState } from 'react';
-import { WorkspaceSwitcher } from './components/WorkspaceSwitcher/WorkspaceSwitcher';
-import { WorkspaceView } from './components/WorkspaceView/WorkspaceView';
+import { PanelLayout } from './components/Layout/PanelLayout';
 import { NewWorkspaceDialog } from './components/NewWorkspaceDialog';
 import { useWebSocket } from './contexts/WebSocketContext';
 import { useAppStore } from './stores/appStore';
@@ -13,6 +12,7 @@ export function App() {
   const [showNewWorkspace, setShowNewWorkspace] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const setRepositories = useAppStore((state) => state.setRepositories);
   const setWorkspaces = useAppStore((state) => state.setWorkspaces);
   const updateWorkspace = useAppStore((state) => state.updateWorkspace);
   const focusedWorkspaceId = useAppStore((state) => state.focusedWorkspaceId);
@@ -53,11 +53,14 @@ export function App() {
     initApiKey();
   }, [reset]);
 
-  // Load workspaces on mount
+  // Load repositories and workspaces on mount
   useEffect(() => {
-    api.workspaces
-      .list()
-      .then((workspaces) => {
+    Promise.all([
+      api.repositories.list(),
+      api.workspaces.list(),
+    ])
+      .then(([repositories, workspaces]) => {
+        setRepositories(repositories);
         setWorkspaces(workspaces);
 
         // Auto-focus on the most recently focused workspace
@@ -72,7 +75,7 @@ export function App() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [setWorkspaces, focusedWorkspaceId, setFocusedWorkspace]);
+  }, [setRepositories, setWorkspaces, focusedWorkspaceId, setFocusedWorkspace]);
 
   // Subscribe to WebSocket events
   useEffect(() => {
@@ -152,13 +155,12 @@ export function App() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <WorkspaceSwitcher onNewWorkspace={() => setShowNewWorkspace(true)} />
-      <WorkspaceView />
+    <>
+      <PanelLayout onNewWorkspace={() => setShowNewWorkspace(true)} />
 
       {showNewWorkspace && (
         <NewWorkspaceDialog onClose={() => setShowNewWorkspace(false)} />
       )}
-    </div>
+    </>
   );
 }

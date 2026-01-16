@@ -8,12 +8,22 @@ import { api } from '../lib/api';
 import type { DirectoryEntry } from '@parawork/shared';
 
 interface DirectoryBrowserProps {
-  onSelect: (path: string) => void;
+  onSelect: (path: string, folderName: string) => void;
   onClose: () => void;
   initialPath?: string;
+  title?: string;
+  selectLabel?: string;
+  filterGitOnly?: boolean;
 }
 
-export function DirectoryBrowser({ onSelect, onClose, initialPath }: DirectoryBrowserProps) {
+export function DirectoryBrowser({
+  onSelect,
+  onClose,
+  initialPath,
+  title = 'Browse Directories',
+  selectLabel = 'Select This Folder',
+  filterGitOnly = false,
+}: DirectoryBrowserProps) {
   const [currentPath, setCurrentPath] = useState<string>(initialPath || '~');
   const [entries, setEntries] = useState<DirectoryEntry[]>([]);
   const [parentPath, setParentPath] = useState<string | null>(null);
@@ -109,14 +119,23 @@ export function DirectoryBrowser({ onSelect, onClose, initialPath }: DirectoryBr
 
   const breadcrumbs = getBreadcrumbs();
 
-  // Filter entries based on search query
+  // Filter entries based on search query and filterGitOnly
   const filteredEntries = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return entries;
+    let filtered = entries;
+
+    // Filter to git repos only if requested
+    if (filterGitOnly) {
+      filtered = filtered.filter(entry => entry.isGitRepository);
     }
-    const query = searchQuery.toLowerCase();
-    return entries.filter(entry => entry.name.toLowerCase().includes(query));
-  }, [entries, searchQuery]);
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(entry => entry.name.toLowerCase().includes(query));
+    }
+
+    return filtered;
+  }, [entries, searchQuery, filterGitOnly]);
 
   return (
     <div
@@ -130,7 +149,7 @@ export function DirectoryBrowser({ onSelect, onClose, initialPath }: DirectoryBr
         {/* Header */}
         <div className="p-4 border-b border-border space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Browse Directories</h2>
+            <h2 className="text-lg font-semibold">{title}</h2>
             <button
               onClick={onClose}
               className="p-1 hover:bg-accent rounded transition-colors"
@@ -329,7 +348,7 @@ export function DirectoryBrowser({ onSelect, onClose, initialPath }: DirectoryBr
               Cancel
             </button>
             <button
-              onClick={() => selectedEntry && onSelect(selectedEntry.path)}
+              onClick={() => selectedEntry && onSelect(selectedEntry.path, selectedEntry.name)}
               disabled={!selectedEntry}
               className={`px-4 py-2 rounded-md transition-colors ${
                 selectedEntry
@@ -337,7 +356,7 @@ export function DirectoryBrowser({ onSelect, onClose, initialPath }: DirectoryBr
                   : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
               }`}
             >
-              Select This Folder
+              {selectLabel}
             </button>
           </div>
         </div>

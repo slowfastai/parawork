@@ -1,9 +1,23 @@
 -- Parawork Database Schema
--- Workspace-centric design for focus-first agent orchestration
+-- Repository-first design for focus-first agent orchestration
+
+-- Repositories (git repository containers for workspaces)
+CREATE TABLE IF NOT EXISTS repositories (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  path TEXT NOT NULL UNIQUE,
+  default_branch TEXT NOT NULL DEFAULT 'main',
+  remote_url TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_repositories_path ON repositories(path);
 
 -- Workspaces (focus units, like browser tabs)
 CREATE TABLE IF NOT EXISTS workspaces (
   id TEXT PRIMARY KEY,
+  repository_id TEXT REFERENCES repositories(id) ON DELETE SET NULL,
   name TEXT NOT NULL,
   path TEXT NOT NULL,
   status TEXT NOT NULL CHECK(status IN ('idle', 'running', 'completed', 'error')),
@@ -21,6 +35,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
 
 CREATE INDEX IF NOT EXISTS idx_workspaces_status ON workspaces(status);
 CREATE INDEX IF NOT EXISTS idx_workspaces_last_focused ON workspaces(last_focused_at DESC);
+CREATE INDEX IF NOT EXISTS idx_workspaces_repository ON workspaces(repository_id);
 
 -- Sessions (agent execution within workspace)
 CREATE TABLE IF NOT EXISTS sessions (

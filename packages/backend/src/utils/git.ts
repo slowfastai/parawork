@@ -37,6 +37,51 @@ export async function isGitRepository(path: string): Promise<boolean> {
 }
 
 /**
+ * Get git repository info (default branch and remote URL)
+ */
+export async function getGitInfo(path: string): Promise<{ branch: string | null; remote: string | null }> {
+  let branch: string | null = null;
+  let remote: string | null = null;
+
+  try {
+    // Get default branch from remote (HEAD ref)
+    const { stdout: headRef } = await execFileAsync(
+      'git',
+      ['-C', path, 'symbolic-ref', 'refs/remotes/origin/HEAD', '--short'],
+      { timeout: 2000 }
+    );
+    // headRef is like "origin/main", extract just the branch name
+    branch = headRef.trim().replace('origin/', '');
+  } catch (error) {
+    // Fallback: try to get current branch
+    try {
+      const { stdout: currentBranch } = await execFileAsync(
+        'git',
+        ['-C', path, 'rev-parse', '--abbrev-ref', 'HEAD'],
+        { timeout: 1000 }
+      );
+      branch = currentBranch.trim();
+    } catch {
+      branch = 'main'; // Default fallback
+    }
+  }
+
+  try {
+    // Get remote URL
+    const { stdout: remoteUrl } = await execFileAsync(
+      'git',
+      ['-C', path, 'remote', 'get-url', 'origin'],
+      { timeout: 1000 }
+    );
+    remote = remoteUrl.trim();
+  } catch (error) {
+    remote = null;
+  }
+
+  return { branch, remote };
+}
+
+/**
  * Validate base repository (check if on main branch, clean working tree)
  * NOTE: Based on user requirements, we DO NOT block if repo is dirty or not on main
  */

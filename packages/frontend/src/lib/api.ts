@@ -7,12 +7,16 @@ import type {
   Message,
   FileChange,
   AgentLog,
+  Repository,
   CreateWorkspaceRequest,
   UpdateWorkspaceRequest,
+  CreateRepositoryRequest,
+  UpdateRepositoryRequest,
   CreateSessionRequest,
   SendMessageRequest,
   ApiResponse,
   BrowseResponse,
+  FileListResponse,
 } from '@parawork/shared';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
@@ -84,6 +88,33 @@ async function fetchApi<T>(
 }
 
 export const api = {
+  // Repositories
+  repositories: {
+    list: () => fetchApi<Repository[]>('/repositories'),
+
+    create: (data: CreateRepositoryRequest) =>
+      fetchApi<Repository>('/repositories', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    get: (id: string) => fetchApi<Repository>(`/repositories/${id}`),
+
+    getWorkspaces: (id: string) =>
+      fetchApi<Workspace[]>(`/repositories/${id}/workspaces`),
+
+    update: (id: string, data: UpdateRepositoryRequest) =>
+      fetchApi<Repository>(`/repositories/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+
+    delete: (id: string) =>
+      fetchApi<void>(`/repositories/${id}`, {
+        method: 'DELETE',
+      }),
+  },
+
   // Workspaces
   workspaces: {
     list: () => fetchApi<Workspace[]>('/workspaces'),
@@ -183,6 +214,11 @@ export const api = {
     browse: (path?: string) =>
       fetchApi<BrowseResponse>(
         `/fs/browse${path ? `?path=${encodeURIComponent(path)}` : ''}`
+      ),
+
+    list: (path: string) =>
+      fetchApi<FileListResponse>(
+        `/fs/list?path=${encodeURIComponent(path)}`
       ),
   },
 };

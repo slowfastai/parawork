@@ -2,9 +2,16 @@
  * Global application store using Zustand
  */
 import { create } from 'zustand';
-import type { Workspace, Session } from '@parawork/shared';
+import type { Workspace, Session, Repository } from '@parawork/shared';
 
 interface AppState {
+  // Repositories
+  repositories: Repository[];
+  setRepositories: (repositories: Repository[]) => void;
+  addRepository: (repository: Repository) => void;
+  updateRepository: (id: string, updates: Partial<Repository>) => void;
+  removeRepository: (id: string) => void;
+
   // Workspaces
   workspaces: Workspace[];
   setWorkspaces: (workspaces: Workspace[]) => void;
@@ -27,6 +34,24 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
+  // Repositories
+  repositories: [],
+  setRepositories: (repositories) => set({ repositories }),
+  addRepository: (repository) =>
+    set((state) => ({
+      repositories: [repository, ...state.repositories],
+    })),
+  updateRepository: (id, updates) =>
+    set((state) => ({
+      repositories: state.repositories.map((repo) =>
+        repo.id === id ? { ...repo, ...updates } : repo
+      ),
+    })),
+  removeRepository: (id) =>
+    set((state) => ({
+      repositories: state.repositories.filter((repo) => repo.id !== id),
+    })),
+
   // Workspaces
   workspaces: [],
   setWorkspaces: (workspaces) => set({ workspaces }),
