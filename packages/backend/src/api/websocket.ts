@@ -7,6 +7,7 @@ import { z } from 'zod';
 import type { ClientToServerEvent, ServerToClientEvent } from '@parawork/shared';
 import { validateWebSocketAuth } from '../middleware/auth.js';
 import { sendToAgent, resizeTerminal } from '../agents/monitor.js';
+import { sendToUserTerminal, resizeUserTerminal } from '../agents/userTerminal.js';
 
 // Validation schemas for incoming WebSocket messages
 const FocusWorkspaceSchema = z.object({
@@ -47,12 +48,31 @@ const TerminalResizeSchema = z.object({
   }),
 });
 
+const UserTerminalInputSchema = z.object({
+  type: z.literal('user_terminal_input'),
+  data: z.object({
+    terminalId: z.string().uuid(),
+    data: z.string(),
+  }),
+});
+
+const UserTerminalResizeSchema = z.object({
+  type: z.literal('user_terminal_resize'),
+  data: z.object({
+    terminalId: z.string().uuid(),
+    cols: z.number().int().min(1).max(500),
+    rows: z.number().int().min(1).max(200),
+  }),
+});
+
 const ClientEventSchema = z.discriminatedUnion('type', [
   FocusWorkspaceSchema,
   SubscribeWorkspaceSchema,
   UnsubscribeWorkspaceSchema,
   TerminalInputSchema,
   TerminalResizeSchema,
+  UserTerminalInputSchema,
+  UserTerminalResizeSchema,
 ]);
 
 interface ExtendedWebSocket extends WebSocket {
@@ -216,6 +236,22 @@ function handleClientEvent(ws: ExtendedWebSocket, event: ClientToServerEvent): v
       const resized = resizeTerminal(event.data.sessionId, event.data.cols, event.data.rows);
       if (!resized) {
         console.warn(`Failed to resize terminal for session ${event.data.sessionId}`);
+      }
+      break;
+
+    case 'user_terminal_input':
+      // Send input to the user terminal PTY process
+      const userInputSent = sendToUserTerminal(event.data.terminalId, event.data.data);
+      if (!userInputSent) {
+        sendError(ws, 'Failed to send input to user terminal');
+      }
+      break;
+
+    case 'user_terminal_resize':
+      // Resize the user terminal PTY
+      const userResized = resizeUserTerminal(event.data.terminalId, event.data.cols, event.data.rows);
+      if (!userResized) {
+        console.warn(`Failed to resize user terminal ${event.data.terminalId}`);
       }
       break;
 

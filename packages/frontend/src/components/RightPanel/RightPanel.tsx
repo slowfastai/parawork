@@ -50,7 +50,7 @@ export function RightPanel() {
           <FileExplorerTree workspacePath={workspace?.path} />
         )}
         {activeTab === 'terminal' && (
-          <UserTerminal workspacePath={workspace?.path} />
+          <UserTerminal workspacePath={workspace?.path} workspaceId={focusedWorkspaceId || undefined} />
         )}
       </div>
     </div>

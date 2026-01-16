@@ -8,6 +8,7 @@ import { CreateWorkspaceRequestSchema, UpdateWorkspaceRequestSchema } from '@par
 import type { ApiResponse, Workspace, GitWorktreeMetadata } from '@parawork/shared';
 import { validateWorkspacePath } from '../../utils/validation.js';
 import { createGitWorktree, cleanupGitWorktree } from '../../utils/git.js';
+import { stopWorkspaceTerminal } from '../../agents/userTerminal.js';
 
 const router = Router();
 
@@ -202,6 +203,9 @@ router.delete('/:id', async (req, res) => {
       };
       return res.status(404).json(response);
     }
+
+    // Stop user terminal if running
+    stopWorkspaceTerminal(req.params.id);
 
     // Cleanup git worktree if exists
     if (workspace.gitWorktree) {

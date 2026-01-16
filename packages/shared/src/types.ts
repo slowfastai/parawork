@@ -167,7 +167,12 @@ export type WebSocketEventType =
   | 'focus_workspace'
   | 'subscribe_workspace'
   | 'unsubscribe_workspace'
-  | 'terminal_input';
+  | 'terminal_input'
+  | 'user_terminal_data'
+  | 'user_terminal_input'
+  | 'user_terminal_resize'
+  | 'user_terminal_started'
+  | 'user_terminal_exited';
 
 /**
  * WebSocket event payloads
@@ -271,20 +276,82 @@ export interface UnsubscribeWorkspaceEvent {
   };
 }
 
+/**
+ * User Terminal types (separate from agent sessions)
+ */
+export type UserTerminalStatus = 'starting' | 'running' | 'stopped';
+
+export interface UserTerminal {
+  id: string;
+  workspaceId: string;
+  pid: number | null;
+  status: UserTerminalStatus;
+  createdAt: number;
+}
+
+export interface UserTerminalDataEvent {
+  type: 'user_terminal_data';
+  data: {
+    terminalId: string;
+    workspaceId: string;
+    data: string; // Raw PTY output
+  };
+}
+
+export interface UserTerminalInputEvent {
+  type: 'user_terminal_input';
+  data: {
+    terminalId: string;
+    data: string; // User input
+  };
+}
+
+export interface UserTerminalResizeEvent {
+  type: 'user_terminal_resize';
+  data: {
+    terminalId: string;
+    cols: number;
+    rows: number;
+  };
+}
+
+export interface UserTerminalStartedEvent {
+  type: 'user_terminal_started';
+  data: {
+    terminalId: string;
+    workspaceId: string;
+    pid: number;
+  };
+}
+
+export interface UserTerminalExitedEvent {
+  type: 'user_terminal_exited';
+  data: {
+    terminalId: string;
+    workspaceId: string;
+    exitCode: number | null;
+  };
+}
+
 export type ServerToClientEvent =
   | WorkspaceStatusChangedEvent
   | AgentLogEvent
   | AgentMessageEvent
   | FileChangedEvent
   | SessionCompletedEvent
-  | TerminalDataEvent;
+  | TerminalDataEvent
+  | UserTerminalDataEvent
+  | UserTerminalStartedEvent
+  | UserTerminalExitedEvent;
 
 export type ClientToServerEvent =
   | FocusWorkspaceEvent
   | SubscribeWorkspaceEvent
   | UnsubscribeWorkspaceEvent
   | TerminalInputEvent
-  | TerminalResizeEvent;
+  | TerminalResizeEvent
+  | UserTerminalInputEvent
+  | UserTerminalResizeEvent;
 
 export type WebSocketEvent = ServerToClientEvent | ClientToServerEvent;
 

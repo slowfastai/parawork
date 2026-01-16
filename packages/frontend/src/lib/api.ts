@@ -227,4 +227,26 @@ export const api = {
         `/fs/search-repos?q=${encodeURIComponent(query)}`
       ),
   },
+
+  // User Terminal
+  userTerminal: {
+    start: (workspaceId: string, shell?: string) =>
+      fetchApi<{ terminalId: string; existing: boolean }>(
+        `/workspaces/${workspaceId}/terminal`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ shell }),
+        }
+      ),
+
+    stop: (workspaceId: string) =>
+      fetchApi<void>(`/workspaces/${workspaceId}/terminal`, {
+        method: 'DELETE',
+      }),
+
+    getStatus: (workspaceId: string) =>
+      fetchApi<{ terminalId?: string; active: boolean }>(
+        `/workspaces/${workspaceId}/terminal`
+      ),
+  },
 };
