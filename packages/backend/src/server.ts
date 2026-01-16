@@ -10,11 +10,13 @@ import repositoriesRouter from './api/routes/repositories.js';
 import sessionsRouter from './api/routes/sessions.js';
 import systemRouter from './api/routes/system.js';
 import filesystemRouter from './api/routes/filesystem.js';
+import terminalsRouter from './api/routes/terminals.js';
 import { authMiddleware } from './middleware/auth.js';
 import { rateLimitMiddleware } from './middleware/rateLimit.js';
 import { getConfig } from './config/settings.js';
 import { closeDatabase } from './db/index.js';
 import { stopAllAgents } from './agents/monitor.js';
+import { stopAllUserTerminals } from './agents/userTerminal.js';
 
 export function createApp() {
   const app = express();
@@ -55,6 +57,7 @@ export function createApp() {
   app.use('/api', sessionsRouter);
   app.use('/api', systemRouter);
   app.use('/api/fs', filesystemRouter);
+  app.use('/api', terminalsRouter);
 
   // 404 handler
   app.use('/api', (req, res) => {
@@ -113,6 +116,10 @@ export function startServer() {
     // Stop all agent processes
     console.log('Stopping agent processes...');
     stopAllAgents();
+
+    // Stop all user terminals
+    console.log('Stopping user terminals...');
+    stopAllUserTerminals();
 
     // Close WebSocket connections
     console.log('Closing WebSocket connections...');
