@@ -55,12 +55,16 @@ cd packages/frontend && pnpm preview # Preview production frontend
 - `pnpm build` - Compile TypeScript to `dist/`
 - `pnpm start` - Run production build
 - `pnpm typecheck` - Type check without emitting
+- `pnpm test` - Run tests with vitest
+- `pnpm test:watch` - Run tests in watch mode
 
 **Frontend** (`packages/frontend`):
 - `pnpm dev` - Run Vite dev server
 - `pnpm build` - Build for production (runs tsc + vite build)
 - `pnpm preview` - Preview production build
 - `pnpm lint` - Run ESLint
+- `pnpm test` - Run tests with vitest
+- `pnpm test:watch` - Run tests in watch mode
 
 **Shared** (`packages/shared`):
 - `pnpm build` - Compile shared types
@@ -74,8 +78,12 @@ cd packages/frontend && pnpm preview # Preview production frontend
 packages/
 ├── backend/          # Node.js server
 │   ├── src/
-│   │   ├── agents/   # Agent process monitoring and lifecycle
+│   │   ├── agents/   # Agent process monitoring, lifecycle, and user terminals
+│   │   │   ├── monitor.ts      # Agent session management
+│   │   │   └── userTerminal.ts # PTY terminal management (node-pty)
 │   │   ├── api/      # REST routes + WebSocket server
+│   │   │   ├── routes/         # API endpoints (repositories, workspaces, sessions, terminals, filesystem)
+│   │   │   └── websocket.ts    # WebSocket event handling
 │   │   ├── db/       # SQLite database (better-sqlite3)
 │   │   ├── config/   # Configuration management
 │   │   ├── middleware/ # Auth, rate limiting
@@ -84,28 +92,40 @@ packages/
 ├── frontend/         # React web UI
 │   └── src/
 │       ├── components/ # React components
+│       │   ├── AgentTerminalPanel/     # Agent output terminal
+│       │   ├── RightPanel/             # Right panel with user terminal
+│       │   ├── RepositorySwitcher/     # Repository management UI
+│       │   ├── WorkspaceSwitcher/      # Workspace list
+│       │   ├── WorkspaceView/          # Main workspace UI
+│       │   ├── Layout/                 # 3-panel layout
+│       │   ├── DirectoryBrowser.tsx    # Folder picker
+│       │   └── NewWorkspaceDialog.tsx  # Workspace creation
 │       ├── stores/   # Zustand state management
 │       ├── hooks/    # Custom React hooks (WebSocket, API)
+│       ├── contexts/ # React contexts (WebSocket)
 │       └── lib/      # API client utilities
 └── shared/           # Shared TypeScript types
     └── src/
-        ├── types.ts  # Core domain types
+        ├── types.ts  # Core domain types (Repository, Workspace, Session, etc.)
         └── schemas.ts # Zod validation schemas
 ```
 
 ### Key Architectural Concepts
 
-#### 1. Workspace-Centric Design
-- **Workspace** = A focus unit (like a browser tab), represents a project directory where an agent works
+#### 1. Repository and Workspace Model
+- **Repository** = A git repository that contains the main branch and can spawn multiple workspaces
+- **Workspace** = A focus unit (like a browser tab), represents a git worktree for isolated work
 - **Session** = An agent execution within a workspace (can have multiple sessions over time)
 - Users focus on **ONE** workspace at a time, while others run in the background
 - The UI uses `focusedWorkspaceId` in Zustand store to track which workspace is being viewed
 
 **Git Worktree Workflow:**
-- Workspaces are created from the **main branch** using git worktrees
+- Repositories are registered first (pointing to the main branch)
+- Workspaces are created from repositories using git worktrees
 - Each workspace is an isolated worktree for a specific task/feature
-- Base project should always be on main branch when creating new workspaces
+- Base repository should always be on main branch when creating new workspaces
 - This allows multiple agents to work on different features simultaneously without conflicts
+- The 3-panel layout: Repository list (left) → Workspace list (center) → Active workspace (right)
 
 #### 2. Real-Time Communication
 - **WebSocket** for bidirectional real-time updates (logs, status changes, messages)
@@ -120,14 +140,25 @@ packages/
 - Graceful shutdown with SIGTERM, force kill with SIGKILL after timeout
 - Output buffer limits (1MB per stream) to prevent memory issues
 
-#### 4. Database Schema
+#### 4. User Terminal System
+- **User terminals** are separate from agent terminals - they provide an interactive shell in the workspace directory
+- Powered by **node-pty** for real PTY (pseudo-terminal) support
+- Backend manages PTY processes in `packages/backend/src/agents/userTerminal.ts`
+- Frontend uses **xterm.js** for terminal rendering in `packages/frontend/src/components/RightPanel/UserTerminal.tsx`
+- One terminal per workspace, persists across UI navigation (can reconnect to existing terminal)
+- WebSocket events: `user_terminal_data`, `user_terminal_input`, `user_terminal_resize`, `user_terminal_started`, `user_terminal_exited`
+- Allows users to run commands (git, npm, etc.) while agent is working
+
+#### 5. Database Schema
 - **SQLite** with WAL mode for better concurrency
-- **5 core tables**: workspaces, sessions, messages, file_changes, agent_logs
-- Cascading deletes: deleting a workspace deletes all sessions/logs/messages
+- **6 core tables**: repositories, workspaces, sessions, messages, file_changes, agent_logs
+- `repositories` table stores git repositories (main branch locations)
+- `workspaces` table includes `repositoryId` foreign key linking to parent repository
+- Cascading deletes: deleting a repository deletes all workspaces; deleting a workspace deletes all sessions/logs/messages
 - Schema in `packages/backend/src/db/schema.sql`
 - Queries use prepared statements in `packages/backend/src/db/queries.ts`
 
-#### 5. Type Safety
+#### 6. Type Safety
 - Shared types in `@parawork/shared` package used by both backend and frontend
 - Zod schemas for runtime validation (WebSocket messages, API requests)
 - Full TypeScript strict mode
@@ -161,11 +192,16 @@ Config is auto-generated on first run with defaults. Edit this file to customize
 - `agent_message` - Chat message from agent
 - `file_changed` - File modification notification
 - `session_completed` - Session completion event
+- `user_terminal_data` - Terminal output data
+- `user_terminal_started` - Terminal started notification
+- `user_terminal_exited` - Terminal exited notification
 
 **Client → Server:**
 - `focus_workspace` - User focused on workspace
 - `subscribe_workspace` - Subscribe to workspace updates
 - `unsubscribe_workspace` - Unsubscribe from workspace
+- `user_terminal_input` - Send input to user terminal
+- `user_terminal_resize` - Resize terminal dimensions
 
 ### Security Considerations
 
@@ -182,19 +218,27 @@ Config is auto-generated on first run with defaults. Edit this file to customize
 - `src/index.ts` - Entry point, initializes DB and starts server
 - `src/server.ts` - Express server setup with routes
 - `src/agents/monitor.ts` - Core agent lifecycle management
+- `src/agents/userTerminal.ts` - User terminal PTY management
 - `src/api/websocket.ts` - WebSocket server and event handling
+- `src/api/routes/` - API endpoints (repositories, workspaces, sessions, terminals, filesystem)
 - `src/db/queries.ts` - All database operations
 - `src/config/settings.ts` - Configuration loading
 
 **Frontend:**
 - `src/App.tsx` - Root component with routing
-- `src/stores/appStore.ts` - Global state (workspaces, focused workspace)
-- `src/hooks/useWebSocket.ts` - WebSocket connection and event handling
+- `src/stores/appStore.ts` - Global state (repositories, workspaces, focused workspace)
+- `src/contexts/WebSocketContext.tsx` - WebSocket connection context
+- `src/hooks/useWebSocket.ts` - WebSocket hooks
 - `src/lib/api.ts` - REST API client functions
+- `src/components/Layout/` - 3-panel layout components
+- `src/components/RepositorySwitcher/` - Repository list and management
+- `src/components/WorkspaceSwitcher/` - Workspace list
+- `src/components/RightPanel/UserTerminal.tsx` - Interactive user terminal (xterm.js)
+- `src/components/AgentTerminalPanel/` - Agent output terminal
 - `src/components/DirectoryBrowser.tsx` - Directory picker with git repository indicators
 
 **Shared:**
-- `src/types.ts` - All TypeScript interfaces and types
+- `src/types.ts` - All TypeScript interfaces and types (Repository, Workspace, Session, etc.)
 - `src/schemas.ts` - Zod validation schemas
 
 ## Development Tips
@@ -228,6 +272,15 @@ Config is auto-generated on first run with defaults. Edit this file to customize
 - Process limits: 1MB buffer per stream, 10KB max per log message
 - Graceful shutdown timeout: 5 seconds before force kill
 
+### Testing
+
+- **Test framework**: Vitest for both backend and frontend
+- **Backend tests**: Located in `packages/backend/src/**/*.test.ts`
+- **Frontend tests**: Located in `packages/frontend/src/**/*.test.tsx`
+- Run tests with `pnpm test` (one-time) or `pnpm test:watch` (watch mode)
+- Test utilities: `fast-check` for property-based testing, `@testing-library/react` for component testing
+- Coverage reports generated with `vitest --coverage`
+
 ### Common Pitfalls
 
 - **Forgetting to build shared**: After changing types, run `pnpm build` in `packages/shared`
@@ -235,6 +288,8 @@ Config is auto-generated on first run with defaults. Edit this file to customize
 - **Database locks**: SQLite is in WAL mode but still has limits on concurrent writes
 - **WebSocket auth**: Must include API key from `config.json` in connection URL
 - **CORS**: Add frontend URL to `config.json` cors.origins if running on different port
+- **Terminal not working**: Ensure workspace has a valid path and user terminal has been started
+- **Repository/Workspace relationship**: Workspaces must be linked to a repository; standalone workspaces are deprecated
 
 ## UI Components
 
@@ -276,3 +331,43 @@ The `DirectoryBrowser` component (`packages/frontend/src/components/DirectoryBro
 - Native OS dialogs require Electron (converts web app to desktop app)
 - Browser security prevents web apps from getting absolute paths via `<input webkitdirectory>`
 - Current approach keeps parawork lightweight and web-based
+
+### 3-Panel Layout
+
+Parawork uses a focus-first 3-panel layout:
+
+**Left Panel: Repository Switcher**
+- Shows list of registered git repositories
+- Search/filter repositories
+- Add new repositories via `+` button
+- Click to filter workspaces by repository
+
+**Center Panel: Workspace Switcher**
+- Shows workspaces (optionally filtered by selected repository)
+- Create new workspace via `+` button (creates git worktree from repository)
+- Click to focus a workspace
+- Right-click context menu for workspace actions
+
+**Right Panel: Active Workspace**
+- **Top section**: Agent terminal (read-only output from agent)
+- **Bottom section**: User terminal (interactive shell using xterm.js + node-pty)
+- Resizable splitter between agent and user terminals
+- User can run commands while agent is working
+
+This design ensures you focus on ONE workspace at a time while maintaining awareness of all repositories and workspaces.
+
+### User Terminal vs Agent Terminal
+
+**Agent Terminal** (`AgentTerminalPanel/`):
+- Read-only display of agent output
+- Shows what the AI agent (Claude Code, Codex, etc.) is doing
+- Streamed via WebSocket as `agent_log` events
+- Located in top section of right panel
+
+**User Terminal** (`RightPanel/UserTerminal.tsx`):
+- Interactive shell running in workspace directory
+- Powered by node-pty (real PTY) + xterm.js (frontend)
+- Allows user to run git, npm, build commands, etc.
+- Separate from agent - user and agent can work simultaneously
+- One persistent terminal per workspace (can reconnect)
+- Located in bottom section of right panel
