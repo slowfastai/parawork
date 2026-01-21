@@ -301,7 +301,7 @@ export const repositoryQueries = {
    */
   getWorkspaces(repositoryId: string): Workspace[] {
     const db = getDatabase();
-    const stmt = db.prepare('SELECT * FROM workspaces WHERE repository_id = ? ORDER BY last_focused_at DESC NULLS LAST, created_at DESC');
+    const stmt = db.prepare('SELECT * FROM workspaces WHERE repository_id = ? ORDER BY created_at ASC, id ASC');
     const rows = stmt.all(repositoryId) as WorkspaceRow[];
     return rows.map(rowToWorkspace);
   },
@@ -349,7 +349,7 @@ export const workspaceQueries = {
    */
   getAll(): Workspace[] {
     const db = getDatabase();
-    const stmt = db.prepare('SELECT * FROM workspaces ORDER BY last_focused_at DESC NULLS LAST, created_at DESC');
+    const stmt = db.prepare('SELECT * FROM workspaces ORDER BY created_at ASC, id ASC');
     const rows = stmt.all() as WorkspaceRow[];
     return rows.map(rowToWorkspace);
   },
