@@ -67,12 +67,6 @@ export function XTerminal({ session }: XTerminalProps) {
     xtermRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
-    // Write welcome message to confirm terminal is working
-    terminal.writeln('\x1b[32m[Parawork Terminal Ready]\x1b[0m');
-    terminal.writeln('Waiting for session to connect...');
-    terminal.writeln('Click here and try typing - you should see characters appear.');
-    terminal.writeln('');
-
     // Debug: log when terminal receives/loses focus
     if (terminal.textarea) {
       console.log('[XTerminal] Textarea element found:', terminal.textarea);
@@ -281,16 +275,17 @@ export function XTerminal({ session }: XTerminalProps) {
       )}
 
       <div
-        ref={terminalRef}
-        className="flex-1"
+        className="flex-1 overflow-hidden"
         style={{
           padding: '8px',
           backgroundColor: '#1a1a2e',
           minHeight: '300px',
-          position: 'relative'
+          position: 'relative',
         }}
         onClick={handleTerminalClick}
-      />
+      >
+        <div ref={terminalRef} className="h-full w-full" />
+      </div>
 
       {/* Removed overlay - it was blocking terminal input */}
     </div>

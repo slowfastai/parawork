@@ -16,6 +16,21 @@ interface UserTerminalProps {
   workspaceId?: string;
 }
 
+type StatusTone = 'info' | 'success' | 'warning' | 'error';
+
+interface StatusMessage {
+  tone: StatusTone;
+  text: string;
+  detail?: string;
+}
+
+const statusToneStyles: Record<StatusTone, string> = {
+  info: 'border-blue-500/30 bg-blue-500/10 text-blue-300',
+  success: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
+  warning: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
+  error: 'border-red-500/30 bg-red-500/10 text-red-300',
+};
+
 export function UserTerminal({ workspacePath, workspaceId }: UserTerminalProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
@@ -23,6 +38,8 @@ export function UserTerminal({ workspacePath, workspaceId }: UserTerminalProps) 
   const terminalIdRef = useRef<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<StatusMessage | null>(null);
+  const [terminalId, setTerminalId] = useState<string | null>(null);
   const { subscribe, send } = useWebSocket();
 
   // Initialize xterm.js terminal
@@ -102,12 +119,20 @@ export function UserTerminal({ workspacePath, workspaceId }: UserTerminalProps) 
     try {
       const result = await api.userTerminal.start(workspaceId);
       terminalIdRef.current = result.terminalId;
+      setTerminalId(result.terminalId);
       setIsConnected(true);
 
       if (result.existing) {
-        xtermRef.current?.writeln('\x1b[33m[Reconnected to existing terminal]\x1b[0m');
-        xtermRef.current?.writeln('\x1b[90mTerminal ID: ' + result.terminalId + '\x1b[0m');
-        xtermRef.current?.writeln('\x1b[90mPress Enter or type a command to continue...\x1b[0m');
+        setStatusMessage({
+          tone: 'info',
+          text: 'Reconnected to existing terminal.',
+          detail: `ID: ${result.terminalId.slice(0, 8)}`,
+        });
+      } else {
+        setStatusMessage({
+          tone: 'success',
+          text: 'Terminal connected.',
+        });
       }
 
       // Send initial resize
@@ -129,7 +154,10 @@ export function UserTerminal({ workspacePath, workspaceId }: UserTerminalProps) 
       }, 100);
     } catch (error) {
       console.error('Failed to start terminal:', error);
-      xtermRef.current?.writeln('\x1b[31m[Failed to start terminal]\x1b[0m');
+      setStatusMessage({
+        tone: 'error',
+        text: 'Failed to start terminal.',
+      });
     } finally {
       setIsStarting(false);
     }
@@ -196,14 +224,23 @@ export function UserTerminal({ workspacePath, workspaceId }: UserTerminalProps) 
           (event.data.terminalId === terminalIdRef.current || event.data.workspaceId === workspaceId)) {
         setIsConnected(false);
         terminalIdRef.current = null;
-        xtermRef.current?.writeln('\n\x1b[33m[Terminal exited]\x1b[0m');
+        setTerminalId(null);
+        setStatusMessage({
+          tone: 'warning',
+          text: 'Terminal exited.',
+        });
       }
 
       if (event.type === 'user_terminal_started' &&
           event.data.workspaceId === workspaceId) {
         console.log('[UserTerminal] Terminal started:', event.data.terminalId);
         terminalIdRef.current = event.data.terminalId;
+        setTerminalId(event.data.terminalId);
         setIsConnected(true);
+        setStatusMessage((current) => current ?? {
+          tone: 'success',
+          text: 'Terminal started.',
+        });
       }
     });
 
@@ -222,7 +259,9 @@ export function UserTerminal({ workspacePath, workspaceId }: UserTerminalProps) 
   useEffect(() => {
     return () => {
       terminalIdRef.current = null;
+      setTerminalId(null);
       setIsConnected(false);
+      setStatusMessage(null);
     };
   }, [workspaceId]);
 
@@ -249,9 +288,17 @@ export function UserTerminal({ workspacePath, workspaceId }: UserTerminalProps) 
       await api.userTerminal.stop(workspaceId);
       setIsConnected(false);
       terminalIdRef.current = null;
-      xtermRef.current?.writeln('\n\x1b[33m[Terminal stopped]\x1b[0m');
+      setTerminalId(null);
+      setStatusMessage({
+        tone: 'warning',
+        text: 'Terminal stopped.',
+      });
     } catch (error) {
       console.error('Failed to stop terminal:', error);
+      setStatusMessage({
+        tone: 'error',
+        text: 'Failed to stop terminal.',
+      });
     }
   };
 
@@ -315,10 +362,20 @@ export function UserTerminal({ workspacePath, workspaceId }: UserTerminalProps) 
         </div>
       </div>
 
+      {statusMessage && (
+        <div className={`mx-3 my-2 flex items-start gap-2 rounded border px-2 py-1 text-xs ${statusToneStyles[statusMessage.tone]}`}>
+          <span className="font-medium">{statusMessage.text}</span>
+          {statusMessage.detail && (
+            <span className="opacity-80" title={terminalId || undefined}>
+              {statusMessage.detail}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Terminal */}
       <div
-        ref={terminalRef}
-        className="flex-1 cursor-text"
+        className="flex-1 cursor-text overflow-hidden"
         style={{
           padding: '8px',
           backgroundColor: '#1a1a2e',
@@ -327,7 +384,9 @@ export function UserTerminal({ workspacePath, workspaceId }: UserTerminalProps) 
         onClick={handleClick}
         onMouseDown={handleClick}
         title="Click to focus terminal"
-      />
+      >
+        <div ref={terminalRef} className="h-full w-full" />
+      </div>
     </div>
   );
 }
