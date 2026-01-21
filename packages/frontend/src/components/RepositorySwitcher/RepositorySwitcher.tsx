@@ -299,7 +299,7 @@ function RepositoryItem({
             e.stopPropagation();
             onAddWorkspace(repository);
           }}
-          className="p-1 hover:bg-accent-foreground/10 rounded transition-colors opacity-0 group-hover:opacity-100"
+          className="p-1 hover:bg-accent-foreground/10 rounded transition-colors"
           title="Add workspace"
         >
           <Plus className="w-3.5 h-3.5" />
