@@ -7,6 +7,8 @@ import type {
   Message,
   FileChange,
   AgentLog,
+  SessionHistoryItem,
+  ConversationEvent,
   Repository,
   CreateWorkspaceRequest,
   UpdateWorkspaceRequest,
@@ -183,6 +185,17 @@ export const api = {
 
     openInTerminal: (id: string) =>
       fetchApi<void>(`/sessions/${id}/open-terminal`, {
+        method: 'POST',
+      }),
+
+    getHistory: (workspaceId: string) =>
+      fetchApi<SessionHistoryItem[]>(`/workspaces/${workspaceId}/sessions/history`),
+
+    getFullConversation: (sessionId: string) =>
+      fetchApi<ConversationEvent[]>(`/sessions/${sessionId}/full-conversation`),
+
+    resume: (sessionId: string) =>
+      fetchApi<Session>(`/sessions/${sessionId}/resume`, {
         method: 'POST',
       }),
   },

@@ -3,11 +3,13 @@
  * Terminal-focused design: shows full terminal when session is active
  */
 import { useState, useEffect } from 'react';
+import { Clock } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { api } from '../../lib/api';
 import { FileChanges } from './FileChanges';
 import { XTerminal } from './XTerminal';
+import { SessionHistoryModal } from './SessionHistoryModal';
 import type { Session, FileChange, ServerToClientEvent } from '@parawork/shared';
 
 export function WorkspaceView() {
@@ -18,8 +20,31 @@ export function WorkspaceView() {
 
   const { subscribe } = useWebSocket();
 
+  const handleSessionResume = async (sessionId: string) => {
+    if (!workspace) return;
+    
+    try {
+      // Resume session via API
+      const response = await api.sessions.resume(sessionId);
+      const newSession = response;
+      
+      // Update local state
+      setSession(newSession);
+      setCurrentSession(workspace.id, newSession);
+      
+      // Update workspace status to running
+      await api.workspaces.update(workspace.id, { status: 'running' });
+      
+      console.log('Session resumed successfully:', newSession);
+    } catch (error) {
+      console.error('Error resuming session:', error);
+      // Could show toast notification here
+    }
+  };
+
   const [session, setSession] = useState<Session | null>(null);
   const [fileChanges, setFileChanges] = useState<FileChange[]>([]);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   const workspace = workspaces.find((ws) => ws.id === focusedWorkspaceId);
 
@@ -137,8 +162,27 @@ export function WorkspaceView() {
     <div className="flex-1 flex flex-col h-screen bg-background">
       {/* Header */}
       <div className="border-b border-border p-4">
-        <h2 className="text-xl font-semibold">{workspace.name}</h2>
-        <p className="text-sm text-muted-foreground">{workspace.path}</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold">{workspace.name}</h2>
+            <p className="text-sm text-muted-foreground">{workspace.path}</p>
+          </div>
+          
+          {/* Action Buttons */}
+          <div className="flex gap-2">
+            {/* Show history button when no active session */}
+            {!session && workspace.status !== 'running' && (
+              <button
+                onClick={() => setShowHistoryModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 transition-colors"
+                title="View and resume previous sessions"
+              >
+                <Clock className="w-4 h-4" />
+                View Chat History
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Terminal-focused Content Area */}
@@ -157,6 +201,14 @@ export function WorkspaceView() {
           </div>
         )}
       </div>
+
+      {/* Session History Modal */}
+      <SessionHistoryModal
+        workspaceId={workspace.id}
+        isOpen={showHistoryModal}
+        onClose={() => setShowHistoryModal(false)}
+        onSessionResume={handleSessionResume}
+      />
     </div>
   );
 }

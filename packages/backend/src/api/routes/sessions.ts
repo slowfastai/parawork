@@ -17,6 +17,8 @@ import type {
   Message,
   FileChange,
   AgentLog,
+  SessionHistoryItem,
+  ConversationEvent,
 } from '@parawork/shared';
 import { stopAgent, startAgent, sendToAgent } from '../../agents/monitor.js';
 import { getConfig } from '../../config/settings.js';
@@ -490,6 +492,153 @@ router.get('/sessions/:id/changes', (req, res) => {
     const response: ApiResponse = {
       success: false,
       error: 'Failed to fetch changes',
+    };
+    res.status(500).json(response);
+  }
+});
+
+/**
+ * GET /api/workspaces/:id/sessions/history
+ * Get completed sessions with metadata
+ */
+router.get('/workspaces/:id/sessions/history', (req, res) => {
+  try {
+    const sessions = sessionQueries.getCompletedByWorkspaceId(req.params.id);
+    const response: ApiResponse<SessionHistoryItem[]> = {
+      success: true,
+      data: sessions,
+    };
+    res.json(response);
+  } catch (error) {
+    console.error('Error fetching session history:', error);
+    const response: ApiResponse = {
+      success: false,
+      error: 'Failed to fetch session history',
+    };
+    res.status(500).json(response);
+  }
+});
+
+/**
+ * GET /api/sessions/:id/full-conversation
+ * Get complete conversation timeline
+ */
+router.get('/sessions/:id/full-conversation', (req, res) => {
+  try {
+    const conversation = sessionQueries.getFullConversation(req.params.id);
+    const response: ApiResponse<ConversationEvent[]> = {
+      success: true,
+      data: conversation,
+    };
+    res.json(response);
+  } catch (error) {
+    console.error('Error fetching conversation:', error);
+    const response: ApiResponse = {
+      success: false,
+      error: 'Failed to fetch conversation',
+    };
+    res.status(500).json(response);
+  }
+});
+
+/**
+ * POST /api/sessions/:id/resume
+ * Resume a session with historical context
+ */
+router.post('/sessions/:id/resume', async (req, res) => {
+  try {
+    const originalSession = sessionQueries.getById(req.params.id);
+    if (!originalSession) {
+      const response: ApiResponse = {
+        success: false,
+        error: 'Session not found',
+      };
+      return res.status(404).json(response);
+    }
+
+    // Check if workspace already has active session
+    const activeSession = sessionQueries.getActiveByWorkspaceId(originalSession.workspaceId);
+    if (activeSession) {
+      const response: ApiResponse = {
+        success: false,
+        error: 'Workspace already has an active session',
+      };
+      return res.status(400).json(response);
+    }
+
+    // Create new session with context from original
+    const newSessionId = uuidv4();
+    const newSession: Session = {
+      id: newSessionId,
+      workspaceId: originalSession.workspaceId,
+      agentType: originalSession.agentType,
+      status: 'starting',
+      processId: null,
+      startedAt: null,
+      completedAt: null,
+    };
+
+    const created = sessionQueries.create(newSession);
+    
+    // Copy messages to new session for context
+    const originalMessages = messageQueries.getBySessionId(req.params.id);
+    for (const message of originalMessages) {
+      const contextMessage: Message = {
+        ...message,
+        id: uuidv4(),
+        sessionId: newSessionId,
+      };
+      messageQueries.create(contextMessage);
+    }
+
+    // Get workspace and agent config for starting agent
+    const workspace = workspaceQueries.getById(originalSession.workspaceId);
+    if (!workspace) {
+      const response: ApiResponse = {
+        success: false,
+        error: 'Workspace not found',
+      };
+      return res.status(404).json(response);
+    }
+
+    const config = getConfig();
+    const agentConfig = config.agents[originalSession.agentType];
+    if (!agentConfig || !agentConfig.enabled) {
+      const response: ApiResponse = {
+        success: false,
+        error: 'Agent not enabled',
+      };
+      return res.status(400).json(response);
+    }
+
+    // Start the agent process
+    const started = startAgent(
+      newSessionId,
+      originalSession.workspaceId,
+      originalSession.agentType,
+      workspace.path,
+      agentConfig.command,
+      agentConfig.defaultArgs
+    );
+
+    if (!started) {
+      const response: ApiResponse = {
+        success: false,
+        error: 'Failed to start agent process',
+      };
+      return res.status(500).json(response);
+    }
+
+    const response: ApiResponse<Session> = {
+      success: true,
+      data: created,
+    };
+    res.json(response);
+  } catch (error) {
+    console.error('Error resuming session:', error);
+    const response: ApiResponse = {
+      success: false,
+      error: 'Failed to resume session',
     };
     res.status(500).json(response);
   }

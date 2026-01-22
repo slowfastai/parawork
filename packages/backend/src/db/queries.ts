@@ -8,6 +8,8 @@ import type {
   Message,
   FileChange,
   AgentLog,
+  SessionHistoryItem,
+  ConversationEvent,
   Repository,
   WorkspaceStatus,
   SessionStatus,
@@ -514,6 +516,78 @@ export const sessionQueries = {
     stmt.run(...values);
 
     return this.getById(id);
+  },
+
+  /**
+   * Get completed sessions for workspace with metadata
+   */
+  getCompletedByWorkspaceId(workspaceId: string): SessionHistoryItem[] {
+    const db = getDatabase();
+    const stmt = db.prepare(`
+      SELECT 
+        s.*,
+        COUNT(m.id) as message_count,
+        CASE 
+          WHEN s.completed_at IS NOT NULL AND s.started_at IS NOT NULL 
+          THEN s.completed_at - s.started_at 
+          ELSE 0 
+        END as duration,
+        (
+          SELECT m.content 
+          FROM messages m 
+          WHERE m.session_id = s.id 
+          ORDER BY m.timestamp DESC 
+          LIMIT 1
+        ) as last_message
+      FROM sessions s
+      LEFT JOIN messages m ON s.id = m.session_id
+      WHERE s.workspace_id = ? AND s.status IN ('completed', 'failed')
+      GROUP BY s.id
+      ORDER BY s.started_at DESC
+    `);
+    const rows = stmt.all(workspaceId) as any[];
+    return rows.map(row => ({
+      ...rowToSession(row),
+      messageCount: row.message_count,
+      duration: row.duration,
+      lastMessage: row.last_message
+    }));
+  },
+
+  /**
+   * Get full conversation timeline for a session
+   */
+  getFullConversation(sessionId: string): ConversationEvent[] {
+    const db = getDatabase();
+    
+    // Get messages
+    const messageStmt = db.prepare(`
+      SELECT 'message' as type, id, timestamp, content, role, NULL as level
+      FROM messages 
+      WHERE session_id = ? 
+    `);
+    
+    // Get agent logs (as terminal activity)
+    const logStmt = db.prepare(`
+      SELECT 'agent_log' as type, id, timestamp, message as content, NULL as role, level
+      FROM agent_logs 
+      WHERE session_id = ? 
+    `);
+    
+    const messages = messageStmt.all(sessionId) as any[];
+    const logs = logStmt.all(sessionId) as any[];
+    
+    // Merge and sort by timestamp
+    return [...messages, ...logs]
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .map(row => ({
+        id: row.id.toString(),
+        type: row.type,
+        timestamp: row.timestamp,
+        content: row.content,
+        role: row.role,
+        level: row.level
+      }));
   },
 };
 

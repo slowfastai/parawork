@@ -86,6 +86,27 @@ export interface AgentLog {
 }
 
 /**
+ * SessionHistoryItem represents a completed session with metadata
+ */
+export interface SessionHistoryItem extends Session {
+  messageCount: number;
+  duration: number;
+  lastMessage?: string;
+}
+
+/**
+ * ConversationEvent represents a unified event in conversation timeline
+ */
+export interface ConversationEvent {
+  id: string;
+  type: 'message' | 'terminal_input' | 'terminal_output' | 'agent_log';
+  timestamp: number;
+  content: string;
+  role?: MessageRole;
+  level?: LogLevel;
+}
+
+/**
  * GitInfo represents git repository metadata
  */
 export interface GitInfo {
