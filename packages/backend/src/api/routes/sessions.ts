@@ -10,6 +10,7 @@ import {
   fileChangeQueries,
   agentLogQueries,
 } from '../../db/queries.js';
+import { getDatabase } from '../../db/index.js';
 import { CreateSessionRequestSchema, SendMessageRequestSchema } from '@parawork/shared';
 import type {
   ApiResponse,
@@ -586,36 +587,42 @@ router.post('/sessions/:id/resume', async (req, res) => {
     }
 
     const startedAt = Date.now();
-
-    // Create new session with context from original
     const newSessionId = uuidv4();
-    const newSession: Session = {
-      id: newSessionId,
-      workspaceId: originalSession.workspaceId,
-      agentType: originalSession.agentType,
-      status: 'starting',
-      processId: null,
-      startedAt,
-      completedAt: null,
-    };
 
-    const created = sessionQueries.create(newSession);
-
-    // Copy messages to new session for context
-    const originalMessages = messageQueries.getBySessionId(req.params.id);
-    for (const message of originalMessages) {
-      const contextMessage: Message = {
-        ...message,
-        id: uuidv4(),
-        sessionId: newSessionId,
+    const db = getDatabase();
+    const createResumedSession = db.transaction(() => {
+      const newSession: Session = {
+        id: newSessionId,
+        workspaceId: originalSession.workspaceId,
+        agentType: originalSession.agentType,
+        status: 'starting',
+        processId: null,
+        startedAt,
+        completedAt: null,
       };
-      messageQueries.create(contextMessage);
-    }
 
-    workspaceQueries.update(originalSession.workspaceId, {
-      status: 'running',
-      agentType: originalSession.agentType,
+      const created = sessionQueries.create(newSession);
+
+      // Copy messages to new session for context
+      const originalMessages = messageQueries.getBySessionId(req.params.id);
+      for (const message of originalMessages) {
+        const contextMessage: Message = {
+          ...message,
+          id: uuidv4(),
+          sessionId: newSessionId,
+        };
+        messageQueries.create(contextMessage);
+      }
+
+      workspaceQueries.update(originalSession.workspaceId, {
+        status: 'running',
+        agentType: originalSession.agentType,
+      });
+
+      return created;
     });
+
+    const created = createResumedSession();
 
     // Start the agent process
     const started = startAgent(
@@ -628,6 +635,8 @@ router.post('/sessions/:id/resume', async (req, res) => {
     );
 
     if (!started) {
+      sessionQueries.update(newSessionId, { status: 'failed', completedAt: Date.now() });
+      workspaceQueries.update(originalSession.workspaceId, { status: 'error' });
       const response: ApiResponse = {
         success: false,
         error: 'Failed to start agent process',
