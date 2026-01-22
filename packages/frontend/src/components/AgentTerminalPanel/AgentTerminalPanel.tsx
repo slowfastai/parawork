@@ -3,11 +3,12 @@
  * Terminal-focused design: shows full terminal when session is active
  */
 import { useState, useEffect } from 'react';
-import { Play, Square, Terminal } from 'lucide-react';
+import { Clock, Play, Square, Terminal } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { api } from '../../lib/api';
 import { XTerminal } from '../WorkspaceView/XTerminal';
+import { SessionHistoryModal } from '../WorkspaceView/SessionHistoryModal';
 import type { Session, ServerToClientEvent, AgentType } from '@parawork/shared';
 
 export function AgentTerminalPanel() {
@@ -22,6 +23,8 @@ export function AgentTerminalPanel() {
 
   const [session, setSession] = useState<Session | null>(null);
   const [starting, setStarting] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [resuming, setResuming] = useState(false);
 
   const workspace = workspaces.find((ws) => ws.id === focusedWorkspaceId);
 
@@ -109,7 +112,7 @@ export function AgentTerminalPanel() {
 
   // Start a new session
   const handleStartSession = async () => {
-    if (!workspace || starting) return;
+    if (!workspace || starting || resuming) return;
 
     setStarting(true);
     try {
@@ -140,6 +143,23 @@ export function AgentTerminalPanel() {
     }
   };
 
+  const handleSessionResume = async (sessionId: string) => {
+    if (!workspace || resuming) return;
+
+    setResuming(true);
+    try {
+      const newSession = await api.sessions.resume(sessionId);
+      setSession(newSession);
+      setCurrentSession(workspace.id, newSession);
+      updateWorkspace(workspace.id, { status: 'running' });
+      await api.workspaces.update(workspace.id, { status: 'running' });
+    } catch (error) {
+      console.error('Error resuming session:', error);
+    } finally {
+      setResuming(false);
+    }
+  };
+
   // No workspace selected
   if (!workspace) {
     return (
@@ -159,7 +179,14 @@ export function AgentTerminalPanel() {
   }
 
   const isRunning = workspace.status === 'running' && session;
-  const canStart = workspace.status !== 'running' && !starting;
+  const canStart = workspace.status !== 'running' && !starting && !resuming;
+  const hasActiveSession =
+    workspace.status === 'running' ||
+    (session && (session.status === 'running' || session.status === 'starting'));
+  const resumeDisabled = hasActiveSession || starting || resuming;
+  const resumeDisabledReason = hasActiveSession
+    ? 'Stop the active session to resume a previous one.'
+    : undefined;
 
   return (
     <div className="h-full flex flex-col bg-background">
@@ -172,6 +199,14 @@ export function AgentTerminalPanel() {
 
         {/* Session controls */}
         <div className="flex items-center gap-2 ml-4">
+          <button
+            onClick={() => setShowHistoryModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-md transition-colors"
+            title="View and resume previous sessions"
+          >
+            <Clock className="w-4 h-4" />
+            History
+          </button>
           {isRunning ? (
             <button
               onClick={handleStopSession}
@@ -199,6 +234,16 @@ export function AgentTerminalPanel() {
       <div className="flex-1 overflow-hidden">
         <XTerminal session={session} />
       </div>
+
+      <SessionHistoryModal
+        workspaceId={workspace.id}
+        isOpen={showHistoryModal}
+        onClose={() => setShowHistoryModal(false)}
+        onSessionResume={handleSessionResume}
+        resumeDisabled={resumeDisabled}
+        resumeDisabledReason={resumeDisabledReason}
+        isResuming={resuming}
+      />
     </div>
   );
 }

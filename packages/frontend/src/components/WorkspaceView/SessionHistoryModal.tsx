@@ -11,14 +11,20 @@ interface SessionHistoryModalProps {
   workspaceId: string;
   isOpen: boolean;
   onClose: () => void;
-  onSessionResume: (sessionId: string) => void;
+  onSessionResume: (sessionId: string) => Promise<void> | void;
+  resumeDisabled?: boolean;
+  resumeDisabledReason?: string;
+  isResuming?: boolean;
 }
 
 export function SessionHistoryModal({ 
   workspaceId, 
   isOpen, 
   onClose, 
-  onSessionResume 
+  onSessionResume,
+  resumeDisabled = false,
+  resumeDisabledReason,
+  isResuming = false,
 }: SessionHistoryModalProps) {
   const [sessions, setSessions] = useState<SessionHistoryItem[]>([]);
   const [filteredSessions, setFilteredSessions] = useState<SessionHistoryItem[]>([]);
@@ -32,6 +38,15 @@ export function SessionHistoryModal({
       loadSessions();
     }
   }, [isOpen, workspaceId]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedSession(null);
+      setConversation([]);
+      setSearchTerm('');
+      setFilteredSessions([]);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     // Filter sessions based on search term
@@ -73,10 +88,13 @@ export function SessionHistoryModal({
     loadConversation(session.id);
   };
 
-  const handleResume = () => {
-    if (selectedSession) {
-      onSessionResume(selectedSession.id);
+  const handleResume = async () => {
+    if (!selectedSession || resumeDisabled || isResuming) return;
+    try {
+      await Promise.resolve(onSessionResume(selectedSession.id));
       onClose();
+    } catch (error) {
+      console.error('Error resuming session:', error);
     }
   };
 
@@ -150,7 +168,7 @@ export function SessionHistoryModal({
                       <div className="flex items-center gap-3 text-xs text-muted-foreground mb-2">
                         <div className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />
-                          {new Date(session.startedAt!).toLocaleDateString()}
+                          {session.startedAt ? new Date(session.startedAt).toLocaleDateString() : 'Unknown date'}
                         </div>
                         <div className="flex items-center gap-1">
                           <MessageCircle className="w-3 h-3" />
@@ -186,17 +204,21 @@ export function SessionHistoryModal({
                         {selectedSession.agentType} Session
                       </h3>
                       <p className="text-sm text-muted-foreground">
-                        {new Date(selectedSession.startedAt!).toLocaleString()} • 
+                        {selectedSession.startedAt ? new Date(selectedSession.startedAt).toLocaleString() : 'Unknown time'} • 
                         {selectedSession.messageCount} messages • 
                         {selectedSession.duration > 0 ? formatDuration(selectedSession.duration) : 'No duration'}
                       </p>
+                      {resumeDisabled && resumeDisabledReason && (
+                        <p className="text-xs text-muted-foreground mt-1">{resumeDisabledReason}</p>
+                      )}
                     </div>
                     <button
                       onClick={handleResume}
-                      className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                      disabled={!selectedSession || resumeDisabled || isResuming}
+                      className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Play className="w-4 h-4" />
-                      Resume Session
+                      {isResuming ? 'Resuming...' : 'Resume Session'}
                     </button>
                   </div>
                 </div>

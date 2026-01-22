@@ -18,6 +18,7 @@ import type {
   ChangeType,
   LogLevel,
 } from '@parawork/shared';
+import { sanitizeForDisplay } from '../utils/validation.js';
 
 /**
  * Database row interfaces (snake_case as stored in SQLite)
@@ -181,7 +182,7 @@ function rowToAgentLog(row: AgentLogRow): AgentLog {
     sessionId: row.session_id,
     timestamp: row.timestamp,
     level: row.level as LogLevel,
-    message: row.message,
+    message: sanitizeForDisplay(row.message),
   };
 }
 
@@ -584,7 +585,7 @@ export const sessionQueries = {
         id: row.id.toString(),
         type: row.type,
         timestamp: row.timestamp,
-        content: row.content,
+        content: row.type === 'agent_log' ? sanitizeForDisplay(String(row.content ?? '')) : row.content,
         role: row.role,
         level: row.level
       }));

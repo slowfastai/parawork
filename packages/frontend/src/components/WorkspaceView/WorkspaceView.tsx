@@ -171,7 +171,7 @@ export function WorkspaceView() {
           {/* Action Buttons */}
           <div className="flex gap-2">
             {/* Show history button when no active session */}
-            {!session && workspace.status !== 'running' && (
+            {!session && (
               <button
                 onClick={() => setShowHistoryModal(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 transition-colors"

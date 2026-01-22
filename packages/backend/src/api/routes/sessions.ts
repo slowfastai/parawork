@@ -566,32 +566,6 @@ router.post('/sessions/:id/resume', async (req, res) => {
       return res.status(400).json(response);
     }
 
-    // Create new session with context from original
-    const newSessionId = uuidv4();
-    const newSession: Session = {
-      id: newSessionId,
-      workspaceId: originalSession.workspaceId,
-      agentType: originalSession.agentType,
-      status: 'starting',
-      processId: null,
-      startedAt: null,
-      completedAt: null,
-    };
-
-    const created = sessionQueries.create(newSession);
-    
-    // Copy messages to new session for context
-    const originalMessages = messageQueries.getBySessionId(req.params.id);
-    for (const message of originalMessages) {
-      const contextMessage: Message = {
-        ...message,
-        id: uuidv4(),
-        sessionId: newSessionId,
-      };
-      messageQueries.create(contextMessage);
-    }
-
-    // Get workspace and agent config for starting agent
     const workspace = workspaceQueries.getById(originalSession.workspaceId);
     if (!workspace) {
       const response: ApiResponse = {
@@ -611,6 +585,38 @@ router.post('/sessions/:id/resume', async (req, res) => {
       return res.status(400).json(response);
     }
 
+    const startedAt = Date.now();
+
+    // Create new session with context from original
+    const newSessionId = uuidv4();
+    const newSession: Session = {
+      id: newSessionId,
+      workspaceId: originalSession.workspaceId,
+      agentType: originalSession.agentType,
+      status: 'starting',
+      processId: null,
+      startedAt,
+      completedAt: null,
+    };
+
+    const created = sessionQueries.create(newSession);
+
+    // Copy messages to new session for context
+    const originalMessages = messageQueries.getBySessionId(req.params.id);
+    for (const message of originalMessages) {
+      const contextMessage: Message = {
+        ...message,
+        id: uuidv4(),
+        sessionId: newSessionId,
+      };
+      messageQueries.create(contextMessage);
+    }
+
+    workspaceQueries.update(originalSession.workspaceId, {
+      status: 'running',
+      agentType: originalSession.agentType,
+    });
+
     // Start the agent process
     const started = startAgent(
       newSessionId,
@@ -629,9 +635,11 @@ router.post('/sessions/:id/resume', async (req, res) => {
       return res.status(500).json(response);
     }
 
+    const updatedSession = sessionQueries.getById(newSessionId);
+
     const response: ApiResponse<Session> = {
       success: true,
-      data: created,
+      data: updatedSession || created,
     };
     res.json(response);
   } catch (error) {

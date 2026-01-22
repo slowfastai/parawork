@@ -176,9 +176,20 @@ export function validateBrowsePath(path: string): {
 export function sanitizeForDisplay(str: string, maxLength: number = 10000): string {
   if (!str) return '';
 
+  // Strip ANSI escape sequences (including common cases missing ESC due to prior sanitization)
+  let sanitized = str
+    // OSC (Operating System Command) sequences
+    .replace(/\x1B\][^\x07]*(?:\x07|\x1B\\)/g, '')
+    // CSI (Control Sequence Introducer) sequences
+    .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '')
+    // 2-character escape sequences
+    .replace(/\x1B[@-Z\\-_]/g, '')
+    // CSI artifacts without ESC (e.g. "[31m")
+    .replace(/\[(?:[0-9;?=>]{1,}[ -/]*[@-~])/g, '');
+
   // Remove control characters except newlines and tabs
   // eslint-disable-next-line no-control-regex
-  const sanitized = str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
 
   // Limit length
   if (sanitized.length > maxLength) {
