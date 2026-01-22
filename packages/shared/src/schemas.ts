@@ -7,7 +7,7 @@ export const WorkspaceStatusSchema = z.enum(['idle', 'running', 'completed', 'er
 export const SessionStatusSchema = z.enum(['starting', 'running', 'completed', 'failed']);
 export const MessageRoleSchema = z.enum(['user', 'assistant']);
 export const ChangeTypeSchema = z.enum(['created', 'modified', 'deleted']);
-export const AgentTypeSchema = z.enum(['claude-code', 'codex']);
+export const AgentTypeSchema = z.enum(['claude-code', 'codex', 'opencode']);
 export const LogLevelSchema = z.enum(['info', 'warning', 'error']);
 
 export const RepositorySchema = z.object({

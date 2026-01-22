@@ -150,6 +150,7 @@ export function NewWorkspaceDialog({ onClose, repository }: NewWorkspaceDialogPr
             >
               <option value="claude-code">Claude Code</option>
               <option value="codex">Codex CLI</option>
+              <option value="opencode">OpenCode</option>
             </select>
           </div>
 

@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
   name TEXT NOT NULL,
   path TEXT NOT NULL,
   status TEXT NOT NULL CHECK(status IN ('idle', 'running', 'completed', 'error')),
-  agent_type TEXT CHECK(agent_type IN ('claude-code', 'codex') OR agent_type IS NULL),
+  agent_type TEXT CHECK(agent_type IN ('claude-code', 'codex', 'opencode') OR agent_type IS NULL),
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   last_focused_at INTEGER,
@@ -41,7 +41,7 @@ CREATE INDEX IF NOT EXISTS idx_workspaces_repository ON workspaces(repository_id
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL,
-  agent_type TEXT NOT NULL CHECK(agent_type IN ('claude-code', 'codex')),
+  agent_type TEXT NOT NULL CHECK(agent_type IN ('claude-code', 'codex', 'opencode')),
   status TEXT NOT NULL CHECK(status IN ('starting', 'running', 'completed', 'failed')),
   process_id INTEGER,
   started_at INTEGER,

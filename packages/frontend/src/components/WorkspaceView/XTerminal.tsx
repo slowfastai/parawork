@@ -325,7 +325,8 @@ export function XTerminal({ session }: XTerminalProps) {
           <p className="mt-1 text-red-600 dark:text-red-300 text-sm">
             The {session.agentType} CLI process failed to start. Please ensure the{' '}
             <code className="bg-red-200 dark:bg-red-800 px-1 rounded">
-              {session.agentType === 'claude-code' ? 'claude' : 'codex'}
+              {session.agentType === 'claude-code' ? 'claude' : 
+               session.agentType === 'codex' ? 'codex' : 'opencode'}
             </code>{' '}
             command is installed and accessible.
           </p>

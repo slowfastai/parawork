@@ -29,6 +29,11 @@ const DEFAULT_CONFIG: Config = {
       command: 'codex',
       defaultArgs: [],
     },
+    'opencode': {
+      enabled: true,
+      command: 'opencode',
+      defaultArgs: [],
+    },
   },
   tunnel: {
     enabled: false,
