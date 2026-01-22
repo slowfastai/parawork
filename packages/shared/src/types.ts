@@ -6,7 +6,7 @@ export type WorkspaceStatus = 'idle' | 'running' | 'completed' | 'error';
 export type SessionStatus = 'starting' | 'running' | 'completed' | 'failed';
 export type MessageRole = 'user' | 'assistant';
 export type ChangeType = 'created' | 'modified' | 'deleted';
-export type AgentType = 'claude-code' | 'codex';
+export type AgentType = 'claude-code' | 'codex' | 'opencode';
 export type LogLevel = 'info' | 'warning' | 'error';
 
 /**

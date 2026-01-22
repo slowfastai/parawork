@@ -197,6 +197,7 @@ export function validateAgentCommand(command: string): boolean {
     'codex',
     'aider',
     'continue',
+    'opencode',
   ];
 
   // Get the base command name (handle paths like /usr/local/bin/claude)
