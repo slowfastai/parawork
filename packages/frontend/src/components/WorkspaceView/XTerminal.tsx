@@ -22,50 +22,70 @@ export function XTerminal({ session }: XTerminalProps) {
 
   // Initialize xterm.js terminal
   useEffect(() => {
-    if (!terminalRef.current) return;
+    if (!terminalRef.current) {
+      console.error('[XTerminal] Cannot initialize: terminalRef.current is null');
+      return;
+    }
 
-    const terminal = new Terminal({
-      cursorBlink: true,
-      cursorStyle: 'block',
-      fontSize: 14,
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      theme: {
-        background: '#1a1a2e',
-        foreground: '#e0e0e0',
-        cursor: '#00ff00',
-        cursorAccent: '#1a1a2e',
-        black: '#000000',
-        red: '#ff5555',
-        green: '#50fa7b',
-        yellow: '#f1fa8c',
-        blue: '#6272a4',
-        magenta: '#ff79c6',
-        cyan: '#8be9fd',
-        white: '#f8f8f2',
-        brightBlack: '#555555',
-        brightRed: '#ff6e6e',
-        brightGreen: '#69ff94',
-        brightYellow: '#ffffa5',
-        brightBlue: '#d6acff',
-        brightMagenta: '#ff92df',
-        brightCyan: '#a4ffff',
-        brightWhite: '#ffffff',
-      },
-      allowProposedApi: true,
-      scrollback: 10000,
-    });
+    let terminal: Terminal | null = null;
+    
+    try {
+      terminal = new Terminal({
+        cursorBlink: true,
+        cursorStyle: 'block',
+        fontSize: 14,
+        fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+        theme: {
+          background: '#1a1a2e',
+          foreground: '#e0e0e0',
+          cursor: '#00ff00',
+          cursorAccent: '#1a1a2e',
+          black: '#000000',
+          red: '#ff5555',
+          green: '#50fa7b',
+          yellow: '#f1fa8c',
+          blue: '#6272a4',
+          magenta: '#ff79c6',
+          cyan: '#8be9fd',
+          white: '#f8f8f2',
+          brightBlack: '#555555',
+          brightRed: '#ff6e6e',
+          brightGreen: '#69ff94',
+          brightYellow: '#ffffa5',
+          brightBlue: '#d6acff',
+          brightMagenta: '#ff92df',
+          brightCyan: '#a4ffff',
+          brightWhite: '#ffffff',
+        },
+        allowProposedApi: true,
+        scrollback: 10000,
+      });
 
-    const fitAddon = new FitAddon();
-    terminal.loadAddon(fitAddon);
-    terminal.open(terminalRef.current);
+      const fitAddon = new FitAddon();
+      terminal.loadAddon(fitAddon);
+      terminal.open(terminalRef.current);
 
-    // Initial fit
-    setTimeout(() => {
-      fitAddon.fit();
-    }, 0);
+      // Initial fit
+      setTimeout(() => {
+        try {
+          fitAddon.fit();
+        } catch (error) {
+          console.error('[XTerminal] Error during initial fit:', error);
+        }
+      }, 0);
 
-    xtermRef.current = terminal;
-    fitAddonRef.current = fitAddon;
+      xtermRef.current = terminal;
+      fitAddonRef.current = fitAddon;
+    } catch (error) {
+      console.error('[XTerminal] Error initializing terminal:', error);
+      return;
+    }
+
+    // If terminal failed to initialize, return early
+    if (!terminal) {
+      console.error('[XTerminal] Terminal initialization failed');
+      return;
+    }
 
     // Debug: log when terminal receives/loses focus
     if (terminal.textarea) {
@@ -89,17 +109,21 @@ export function XTerminal({ session }: XTerminalProps) {
     // Handle terminal resize
     const handleResize = () => {
       if (fitAddonRef.current && xtermRef.current) {
-        fitAddonRef.current.fit();
-        // Notify backend of resize
-        if (session?.id) {
-          send({
-            type: 'terminal_resize',
-            data: {
-              sessionId: session.id,
-              cols: xtermRef.current.cols,
-              rows: xtermRef.current.rows,
-            },
-          });
+        try {
+          fitAddonRef.current.fit();
+          // Notify backend of resize
+          if (session?.id) {
+            send({
+              type: 'terminal_resize',
+              data: {
+                sessionId: session.id,
+                cols: xtermRef.current.cols,
+                rows: xtermRef.current.rows,
+              },
+            });
+          }
+        } catch (error) {
+          console.error('[XTerminal] Error during terminal resize:', error);
         }
       }
     };
@@ -171,7 +195,11 @@ export function XTerminal({ session }: XTerminalProps) {
       if (event.type === 'terminal_data' && event.data.sessionId === sessionId) {
         console.log('[XTerminal] Received terminal data:', event.data.data.substring(0, 50));
         if (xtermRef.current) {
-          xtermRef.current.write(event.data.data);
+          try {
+            xtermRef.current.write(event.data.data);
+          } catch (error) {
+            console.error('[XTerminal] Error writing terminal data:', error);
+          }
         }
       }
     });
@@ -184,15 +212,19 @@ export function XTerminal({ session }: XTerminalProps) {
     // Small delay to ensure terminal is properly sized
     const timer = setTimeout(() => {
       if (xtermRef.current && fitAddonRef.current) {
-        fitAddonRef.current.fit();
-        send({
-          type: 'terminal_resize',
-          data: {
-            sessionId: session.id,
-            cols: xtermRef.current.cols,
-            rows: xtermRef.current.rows,
-          },
-        });
+        try {
+          fitAddonRef.current.fit();
+          send({
+            type: 'terminal_resize',
+            data: {
+              sessionId: session.id,
+              cols: xtermRef.current.cols,
+              rows: xtermRef.current.rows,
+            },
+          });
+        } catch (error) {
+          console.error('[XTerminal] Error during initial resize:', error);
+        }
       }
     }, 100);
 
@@ -206,7 +238,11 @@ export function XTerminal({ session }: XTerminalProps) {
       // Focus with a small delay to ensure DOM is ready
       setTimeout(() => {
         console.log('[XTerminal] Focusing terminal');
-        xtermRef.current?.focus();
+        try {
+          xtermRef.current?.focus();
+        } catch (error) {
+          console.error('[XTerminal] Error focusing terminal:', error);
+        }
       }, 50);
     }
   }, [session?.id, session?.status]);
@@ -215,27 +251,49 @@ export function XTerminal({ session }: XTerminalProps) {
   const handleTerminalClick = () => {
     console.log('[XTerminal] Click detected, attempting to focus');
     if (xtermRef.current) {
-      xtermRef.current.focus();
-      // Also try focusing the textarea directly
-      const textarea = xtermRef.current.textarea;
-      if (textarea) {
-        console.log('[XTerminal] Focusing textarea directly');
-        textarea.focus();
-      } else {
-        console.log('[XTerminal] No textarea found!');
+      try {
+        xtermRef.current.focus();
+        // Also try focusing the textarea directly
+        const textarea = xtermRef.current.textarea;
+        if (textarea) {
+          console.log('[XTerminal] Focusing textarea directly');
+          textarea.focus();
+        } else {
+          console.log('[XTerminal] No textarea found!');
+        }
+      } catch (error) {
+        console.error('[XTerminal] Error focusing terminal on click:', error);
       }
     }
   };
 
-  // Clear terminal only when switching to a different session (not on first load)
+  // Clear terminal on session transitions (null→session, session→null, session→different session)
   const prevSessionIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (session?.id && prevSessionIdRef.current && prevSessionIdRef.current !== session.id) {
-      if (xtermRef.current) {
-        xtermRef.current.clear();
+    const currentSessionId = session?.id || null;
+    const previousSessionId = prevSessionIdRef.current;
+    
+    // Determine if we should clear the terminal
+    const shouldClear = 
+      // Case 1: Session stopped (running → null)
+      (previousSessionId !== null && currentSessionId === null) ||
+      // Case 2: New session started (null → running)
+      (previousSessionId === null && currentSessionId !== null) ||
+      // Case 3: Different session (running → different running)
+      (previousSessionId !== null && currentSessionId !== null && 
+       previousSessionId !== currentSessionId);
+    
+    if (shouldClear && xtermRef.current) {
+      try {
+        // Use reset() instead of clear() to completely clear both viewport and scrollback
+        xtermRef.current.reset();
+      } catch (error) {
+        console.error('[XTerminal] Error clearing terminal:', error);
       }
     }
-    prevSessionIdRef.current = session?.id || null;
+    
+    // Update tracking ref
+    prevSessionIdRef.current = currentSessionId;
   }, [session?.id]);
 
   return (
